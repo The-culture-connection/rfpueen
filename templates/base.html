@@ -1,0 +1,49 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{% block title %}RFP Queen{% endblock %}</title>
+    <link rel="stylesheet" href="https://rsms.me/inter/inter.css" />
+    <link rel="stylesheet" href="{% static 'opportunities/css/app.css' %}" />
+    {% block head %}{% endblock %}
+  </head>
+  <body class="bg-surface">
+    <header class="top-nav">
+      <div class="container">
+        <a href="{% url 'opportunities:dashboard' %}" class="brand">The Culture Connection</a>
+        {% if user.is_authenticated %}
+          <nav class="nav-links">
+            <a href="{% url 'opportunities:recommendations' %}">Explore</a>
+            <a href="{% url 'opportunities:applied' %}">Applied</a>
+            <a href="{% url 'opportunities:saved' %}">Saved</a>
+            <a href="{% url 'opportunities:profile' %}">Profile</a>
+            <form action="{% url 'logout' %}" method="post">
+              {% csrf_token %}
+              <button type="submit" class="btn ghost">Sign out</button>
+            </form>
+          </nav>
+        {% else %}
+          <nav class="nav-links">
+            <a href="{% url 'login' %}">Sign in</a>
+          </nav>
+        {% endif %}
+      </div>
+    </header>
+
+    <main class="container">
+      {% if messages %}
+        <div class="messages">
+          {% for message in messages %}
+            <div class="message {{ message.tags }}">{{ message }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+      {% block content %}{% endblock %}
+    </main>
+
+    <script src="{% static 'opportunities/js/opportunities.js' %}"></script>
+    {% block scripts %}{% endblock %}
+  </body>
+</html>

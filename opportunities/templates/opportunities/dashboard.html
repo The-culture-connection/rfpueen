@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard • RFP Queen{% endblock %}
+
+{% block content %}
+  <section class="page-heading">
+    <h1>Welcome back{% if active_profile and active_profile.organization_name %}, {{ active_profile.organization_name }}{% endif %}</h1>
+    <p>Review your pipeline and jump into new, highly matched opportunities.</p>
+  </section>
+
+  <section class="cards-grid">
+    <article class="card metric-card">
+      <header>
+        <span class="metric-label">Applied opportunities</span>
+        <span class="metric-value">{{ applied_count }}</span>
+      </header>
+      <p>Track where you have submitted and keep an eye on next steps.</p>
+      <a class="btn link" href="{% url 'opportunities:applied' %}">View applied</a>
+    </article>
+
+    <article class="card metric-card">
+      <header>
+        <span class="metric-label">Saved for later</span>
+        <span class="metric-value">{{ saved_count }}</span>
+      </header>
+      <p>Revisit the opportunities you swiped right on.</p>
+      <a class="btn link" href="{% url 'opportunities:saved' %}">View saved</a>
+    </article>
+
+    <article class="card metric-card">
+      <header>
+        <span class="metric-label">Smart matches</span>
+        <span class="metric-value">AI</span>
+      </header>
+      <p>Our intelligent matching engine recommends grants tailored to your profile.</p>
+      <a class="btn link" href="{% url 'opportunities:recommendations' %}">Find matches</a>
+    </article>
+  </section>
+
+  {% if not has_profile %}
+    <section class="card attention-card">
+      <h2>Enhance your matches</h2>
+      <p>Tell us more about your organization to boost relevancy and improve win-rate predictions.</p>
+      <a class="btn primary" href="{% url 'opportunities:profile' %}">Complete profile</a>
+    </section>
+  {% endif %}
+{% endblock %}

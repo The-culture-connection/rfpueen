@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+
+{% block title %}Saved Opportunities • RFP Queen{% endblock %}
+
+{% block content %}
+  <section class="page-heading">
+    <h1>Saved for later</h1>
+    <p>These opportunities piqued your interest. Revisit them to apply or dismiss.</p>
+  </section>
+
+  {% if rows %}
+    <section class="card table-card">
+      <table>
+        <thead>
+          <tr>
+            <th>Opportunity</th>
+            <th>Win rate</th>
+            <th>Saved on</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+            <tr data-opportunity-id="{{ row.interaction.opportunity_id }}" data-match-json="{{ row.metadata_json|escapejs }}">
+              <td>
+                <div class="table-title">{{ row.metadata.title|default:row.interaction.opportunity_id }}</div>
+                <div class="table-subtitle">{{ row.metadata.summary|default:"No summary" }}</div>
+              </td>
+              <td>
+                {% if row.metadata.win_rate %}
+                  {{ row.metadata.win_rate }}%
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+              <td>{{ row.metadata.actioned_at|default:row.interaction.created_at }}</td>
+              <td>
+                {% if row.metadata.url %}
+                  <a class="btn link" href="{{ row.metadata.url }}" target="_blank" rel="noopener">View opportunity</a>
+                {% endif %}
+                <button class="btn ghost js-remove" data-action="pass">Remove</button>
+                <button class="btn primary js-apply" data-action="apply">Apply</button>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+  {% else %}
+    <section class="card empty-state">
+      <h2>No saved opportunities</h2>
+      <p>Opportunities you save from the recommendations page will appear here.</p>
+      <a class="btn primary" href="{% url 'opportunities:recommendations' %}">Find opportunities</a>
+    </section>
+  {% endif %}
+
+  {% if firebase_ids and firebase_ids|length > rows|length %}
+    <section class="card attention-card">
+      <h2>Saved in Firebase</h2>
+      <p>We found {{ firebase_ids|length }} saved opportunities in Firebase. They will sync as soon as you interact with them from this portal.</p>
+    </section>
+  {% endif %}
+{% endblock %}

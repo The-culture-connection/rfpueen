@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+
+{% block title %}Explore Matches • RFP Queen{% endblock %}
+
+{% block content %}
+  <section class="page-heading">
+    <h1>Smart opportunity matches</h1>
+    <p>We ranked the top grants for you based on profile fit, eligibility criteria, and historical signals.</p>
+  </section>
+
+  {% if matches %}
+    <section class="opportunity-grid" id="opportunity-grid">
+      {% for match in matches %}
+        <article class="card opportunity-card" data-opportunity-id="{{ match.id }}" data-match-index="{{ forloop.counter0 }}">
+          <header class="opportunity-header">
+            <div>
+              <h2>{{ match.title }}</h2>
+              {% if match.bucket %}
+                <span class="badge">{{ match.bucket }}</span>
+              {% endif %}
+            </div>
+            <div class="opportunity-metrics">
+              <span class="metric win-rate">{{ match.win_rate }}% win rate</span>
+              <span class="metric confidence">{{ match.confidence|floatformat:0 }} confidence</span>
+              <span class="metric score">score {{ match.score }}</span>
+            </div>
+          </header>
+
+          <p class="summary">{{ match.summary|default:"No summary available." }}</p>
+
+          <dl class="opportunity-meta">
+            {% if match.funding_amount %}
+              <div><dt>Funding</dt><dd>{{ match.funding_amount }}</dd></div>
+            {% endif %}
+            {% if match.deadline %}
+              <div><dt>Deadline</dt><dd>{{ match.deadline }}</dd></div>
+            {% endif %}
+            {% if match.location %}
+              <div><dt>Location</dt><dd>{{ match.location }}</dd></div>
+            {% endif %}
+          </dl>
+
+          <section class="insights">
+            <h3>Why it matches</h3>
+            <ul>
+              {% for insight in match.insights %}
+                <li class="{% if not insight.met %}dim{% endif %}">
+                  <strong>{{ insight.label }}:</strong> {{ insight.detail }}
+                </li>
+              {% endfor %}
+            </ul>
+          </section>
+
+          {% if match.missing_criteria %}
+            <section class="callout warning">
+              <strong>Watch-outs:</strong>
+              <ul>
+                {% for item in match.missing_criteria %}
+                  <li>{{ item|capfirst }}</li>
+                {% endfor %}
+              </ul>
+            </section>
+          {% endif %}
+
+          <footer class="card-actions">
+            <button class="btn primary" data-action="apply">Apply now</button>
+            <button class="btn secondary" data-action="save">Save for later</button>
+            <button class="btn ghost" data-action="pass">Pass</button>
+          </footer>
+        </article>
+      {% endfor %}
+    </section>
+
+    <script type="application/json" id="matches-data">{{ matches_json|safe }}</script>
+  {% else %}
+    <section class="card empty-state">
+      <h2>No opportunities yet</h2>
+      <p>Try updating your profile or broadening the filters to discover more matches.</p>
+      <a class="btn primary" href="{% url 'opportunities:profile' %}">Update profile</a>
+    </section>
+  {% endif %}
+{% endblock %}

@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block title %}Applied Opportunities • RFP Queen{% endblock %}
+
+{% block content %}
+  <section class="page-heading">
+    <h1>Your applied pipeline</h1>
+    <p>Monitor all opportunities you've taken action on and jump back into applications when needed.</p>
+  </section>
+
+  {% if rows %}
+    <section class="card table-card">
+      <table>
+        <thead>
+          <tr>
+            <th>Opportunity</th>
+            <th>Win rate</th>
+            <th>Next steps</th>
+            <th>Last action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+            <tr data-opportunity-id="{{ row.interaction.opportunity_id }}" data-match-json="{{ row.metadata_json|escapejs }}">
+              <td>
+                <div class="table-title">{{ row.metadata.title|default:row.interaction.opportunity_id }}</div>
+                <div class="table-subtitle">{{ row.metadata.summary|default:"No summary" }}</div>
+              </td>
+              <td>
+                {% if row.metadata.win_rate %}
+                  {{ row.metadata.win_rate }}%
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+              <td>
+                {% if row.metadata.application_url %}
+                  <a class="btn link" href="{{ row.metadata.application_url }}" target="_blank" rel="noopener">Continue application</a>
+                {% elif row.metadata.application_instructions %}
+                  <details>
+                    <summary>View instructions</summary>
+                    <ol>
+                      {% for step in row.metadata.application_instructions %}
+                        <li>{{ step }}</li>
+                      {% endfor %}
+                    </ol>
+                  </details>
+                {% else %}
+                  <span class="text-muted">Awaiting instructions</span>
+                {% endif %}
+              </td>
+              <td>{{ row.metadata.actioned_at|default:row.interaction.created_at }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+  {% else %}
+    <section class="card empty-state">
+      <h2>No applications yet</h2>
+      <p>Applications you submit from the recommendations page will appear here.</p>
+      <a class="btn primary" href="{% url 'opportunities:recommendations' %}">Browse recommendations</a>
+    </section>
+  {% endif %}
+
+  {% if firebase_ids and firebase_ids|length > rows|length %}
+    <section class="card attention-card">
+      <h2>Additional applications in Firebase</h2>
+      <p>We detected {{ firebase_ids|length }} records in Firebase. Some may not yet be synced locally. Sign out/in or trigger a sync to pull the latest.</p>
+    </section>
+  {% endif %}
+{% endblock %}

@@ -1,0 +1,438 @@
+:root {
+  --font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --background: #f5f6f9;
+  --card-bg: #ffffff;
+  --primary: #685bc6;
+  --primary-dark: #4f46ba;
+  --text: #1f2937;
+  --muted: #6b7280;
+  --border: #e5e7eb;
+  --warning: #f97316;
+  --success: #16a34a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-family);
+  background-color: var(--background);
+  color: var(--text);
+}
+
+.bg-surface {
+  min-height: 100vh;
+}
+
+.container {
+  width: min(1100px, 92vw);
+  margin: 0 auto;
+  padding: 24px 0 80px;
+}
+
+.top-nav {
+  border-bottom: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(8px);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+.top-nav .container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0;
+}
+
+.brand {
+  font-weight: 700;
+  color: var(--text);
+  text-decoration: none;
+  font-size: 1.1rem;
+}
+
+.nav-links {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.nav-links a {
+  color: var(--muted);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.nav-links a:hover {
+  color: var(--text);
+}
+
+.nav-links form {
+  margin: 0;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 16px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.btn.primary {
+  background: var(--primary);
+  color: white;
+}
+
+.btn.primary:hover {
+  background: var(--primary-dark);
+}
+
+.btn.secondary {
+  background: rgba(104, 91, 198, 0.1);
+  color: var(--primary);
+  border-color: rgba(104, 91, 198, 0.4);
+}
+
+.btn.disabled {
+  opacity: 0.65;
+  pointer-events: none;
+}
+
+.btn.ghost {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--muted);
+}
+
+.btn.link {
+  background: transparent;
+  color: var(--primary);
+  padding: 0;
+  border: none;
+}
+
+.btn:hover {
+  transform: translateY(-1px);
+}
+
+.page-heading {
+  margin: 32px 0 24px;
+}
+
+.page-heading h1 {
+  margin: 0;
+  font-size: 1.9rem;
+}
+
+.page-heading p {
+  margin: 8px 0 0;
+  color: var(--muted);
+}
+
+.card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 24px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.05);
+}
+
+.cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 20px;
+}
+
+.card.metric-card header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.metric-label {
+  font-size: 0.95rem;
+  color: var(--muted);
+}
+
+.metric-value {
+  font-size: 2rem;
+  font-weight: 700;
+}
+
+.attention-card {
+  margin-top: 24px;
+  border-left: 4px solid var(--primary);
+}
+
+.messages {
+  margin-bottom: 20px;
+}
+
+.message {
+  padding: 12px 16px;
+  border-radius: 12px;
+  margin-bottom: 8px;
+  background: rgba(104, 91, 198, 0.1);
+  color: var(--primary-dark);
+}
+
+.message.error {
+  background: rgba(239, 68, 68, 0.15);
+  color: #b91c1c;
+}
+
+.opportunity-grid {
+  display: grid;
+  gap: 24px;
+}
+
+.opportunity-card h2 {
+  margin: 0 0 4px;
+}
+
+.opportunity-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+
+.opportunity-metrics {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  text-align: right;
+}
+
+.metric {
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.metric.win-rate {
+  font-weight: 700;
+  color: var(--success);
+}
+
+.summary {
+  margin: 16px 0;
+  color: var(--muted);
+}
+
+.opportunity-meta {
+  display: flex;
+  gap: 40px;
+  margin: 16px 0;
+}
+
+.opportunity-meta dt {
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.opportunity-meta dd {
+  margin: 4px 0 0;
+}
+
+.insights ul,
+.callout ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.insights li {
+  margin-bottom: 6px;
+}
+
+.insights li.dim {
+  color: var(--muted);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(104, 91, 198, 0.15);
+  color: var(--primary);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.callout {
+  margin-top: 16px;
+  padding: 16px;
+  border-radius: 16px;
+}
+
+.callout.warning {
+  background: rgba(249, 115, 22, 0.12);
+  color: #9a3412;
+}
+
+.card-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 24px;
+  flex-wrap: wrap;
+}
+
+.table-card table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table-card th,
+.table-card td {
+  text-align: left;
+  padding: 14px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.table-title {
+  font-weight: 600;
+}
+
+.table-subtitle {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.text-muted {
+  color: var(--muted);
+}
+
+.form-card form {
+  display: grid;
+  gap: 16px;
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-field input,
+.form-field textarea,
+.form-field select {
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  font: inherit;
+}
+
+.form-field textarea {
+  resize: vertical;
+}
+
+.required {
+  color: var(--warning);
+  margin-left: 4px;
+}
+
+.help-text {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.meta-card dl {
+  display: grid;
+  gap: 12px;
+}
+
+.meta-card dt {
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.empty-state {
+  text-align: center;
+  padding: 40px;
+}
+
+.empty-state h2 {
+  margin-bottom: 12px;
+}
+
+.toast-container {
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  z-index: 1000;
+}
+
+.toast {
+  background: var(--card-bg);
+  border-radius: 12px;
+  padding: 12px 18px;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.15);
+  border: 1px solid var(--border);
+  min-width: 220px;
+  animation: toast-in 0.2s ease;
+}
+
+.toast.success {
+  border-color: rgba(22, 163, 74, 0.4);
+}
+
+.toast.error {
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+.toast.info {
+  border-color: rgba(104, 91, 198, 0.4);
+}
+
+.toast.hide {
+  opacity: 0;
+  transform: translateY(-6px);
+  transition: all 0.2s ease;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 720px) {
+  .opportunity-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .opportunity-metrics {
+    align-items: flex-start;
+    text-align: left;
+  }
+
+  .nav-links {
+    flex-wrap: wrap;
+  }
+
+  .card-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
