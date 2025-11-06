@@ -1,2 +1,9 @@
+<<<<<<< HEAD
 
 django.log
+=======
+.DS_Store
+*.log
+node_modules/
+.env
+>>>>>>> e0e9c3299e3c8e3d11840754b409adc8fc9ac86b

@@ -1,0 +1,21 @@
+{
+  "name": "rfpqueen",
+  "version": "1.0.0",
+  "description": "RFP Queen - Opportunity Matching Platform",
+  "main": "index.html",
+  "scripts": {
+    "start": "npx http-server -p 8080 -c-1",
+    "dev": "npx http-server -p 8080 -c-1 -o"
+  },
+  "keywords": [
+    "rfp",
+    "opportunities",
+    "matching",
+    "fundraising"
+  ],
+  "author": "RFP Queen",
+  "license": "MIT",
+  "devDependencies": {
+    "http-server": "^14.1.1"
+  }
+}
