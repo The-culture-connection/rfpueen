@@ -54,7 +54,7 @@ class OpportunityMatcher:
             matches = pattern.findall(search_text)
             if matches:
                 count = len(matches)
-                score += count * 3.0  # Main keywords worth 3x
+                score += count * 3.0
                 match_details['main_matches'].append({'keyword': keyword, 'count': count})
         
         # Sub keywords have standard weight

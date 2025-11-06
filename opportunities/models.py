@@ -7,18 +7,15 @@ class UserProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
     firebase_uid = models.CharField(max_length=128, unique=True, null=True, blank=True)
     
-    # Profile information
     organization_name = models.CharField(max_length=255, blank=True)
     organization_type = models.CharField(max_length=100, blank=True)
     city = models.CharField(max_length=100, blank=True)
     state = models.CharField(max_length=100, blank=True)
     
-    # Funding preferences (stored as JSON)
     funding_types = models.JSONField(default=list, blank=True)
     interests_main = models.JSONField(default=list, blank=True)
     interests_sub = models.JSONField(default=list, blank=True)
     
-    # Statistics
     total_applied = models.IntegerField(default=0)
     total_saved = models.IntegerField(default=0)
     
@@ -69,7 +66,6 @@ class Opportunity(models.Model):
     
     @property
     def urgency_bucket(self):
-        """Calculate urgency bucket based on deadline"""
         if not self.close_date and not self.deadline:
             return "ongoing"
         
@@ -99,7 +95,7 @@ class OpportunityMatch(models.Model):
     opportunity = models.ForeignKey(Opportunity, on_delete=models.CASCADE, related_name='matches')
     
     relevance_score = models.FloatField(default=0.0)
-    win_rate = models.FloatField(default=0.0, help_text="Calculated win rate percentage")
+    win_rate = models.FloatField(default=0.0)
     win_rate_reasoning = models.JSONField(default=dict, blank=True)
     
     is_viewed = models.BooleanField(default=False)
@@ -108,9 +104,6 @@ class OpportunityMatch(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
-    def __str__(self):
-        return f"{self.user_profile.user.email} - {self.opportunity.title[:30]}"
-    
     class Meta:
         db_table = 'opportunity_matches'
         unique_together = [['user_profile', 'opportunity']]
@@ -118,7 +111,7 @@ class OpportunityMatch(models.Model):
 
 
 class Application(models.Model):
-    """Tracks user applications to opportunities"""
+    """Tracks user applications"""
     user_profile = models.ForeignKey(UserProfile, on_delete=models.CASCADE, related_name='applications')
     opportunity = models.ForeignKey(Opportunity, on_delete=models.CASCADE, related_name='applications')
     
@@ -133,14 +126,10 @@ class Application(models.Model):
         ('rejected', 'Rejected'),
     ]
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
-    
     user_notes = models.TextField(blank=True, null=True)
     
     applied_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
-    def __str__(self):
-        return f"{self.user_profile.user.email} - {self.opportunity.title[:30]}"
     
     class Meta:
         db_table = 'applications'
@@ -149,15 +138,12 @@ class Application(models.Model):
 
 
 class SavedOpportunity(models.Model):
-    """Tracks opportunities saved for later by users"""
+    """Tracks saved opportunities"""
     user_profile = models.ForeignKey(UserProfile, on_delete=models.CASCADE, related_name='saved_opportunities')
     opportunity = models.ForeignKey(Opportunity, on_delete=models.CASCADE, related_name='saved_by')
     
     user_notes = models.TextField(blank=True, null=True)
     saved_at = models.DateTimeField(auto_now_add=True)
-    
-    def __str__(self):
-        return f"{self.user_profile.user.email} - {self.opportunity.title[:30]} (Saved)"
     
     class Meta:
         db_table = 'saved_opportunities'
@@ -176,9 +162,6 @@ class ApplicationPathway(models.Model):
     last_verified = models.DateTimeField(auto_now=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
-    
-    def __str__(self):
-        return f"Pathway for {self.opportunity.title[:30]}"
     
     class Meta:
         db_table = 'application_pathways'

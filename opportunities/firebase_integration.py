@@ -2,7 +2,7 @@
 Firebase integration for syncing opportunity data
 """
 import firebase_admin
-from firebase_admin import credentials, firestore, auth
+from firebase_admin import credentials, firestore, auth as firebase_auth
 from django.conf import settings
 from .models import Opportunity, UserProfile
 from datetime import datetime
@@ -25,11 +25,9 @@ class FirebaseService:
             return
         
         try:
-            # Try to get existing app
             firebase_admin.get_app()
             cls._initialized = True
         except ValueError:
-            # Initialize new app
             try:
                 service_account_path = getattr(settings, 'FIREBASE_SERVICE_ACCOUNT_PATH', None)
                 
@@ -37,14 +35,12 @@ class FirebaseService:
                     cred = credentials.Certificate(service_account_path)
                     firebase_admin.initialize_app(cred)
                 else:
-                    # Use application default credentials or environment
                     firebase_admin.initialize_app()
                 
                 cls._initialized = True
                 logger.info("Firebase Admin SDK initialized successfully")
             except Exception as e:
-                logger.error(f"Failed to initialize Firebase: {e}")
-                # Don't raise - allow app to continue with limited functionality
+                logger.warning(f"Firebase initialization skipped: {e}")
                 cls._initialized = False
     
     @classmethod
@@ -64,9 +60,7 @@ class FirebaseService:
     
     @classmethod
     def sync_opportunities_from_collection(cls, collection_name: str, limit: int = None):
-        """
-        Sync opportunities from a specific Firebase collection
-        """
+        """Sync opportunities from a specific Firebase collection"""
         db = cls.get_db()
         if not db:
             logger.warning("Firestore not available")
@@ -86,11 +80,9 @@ class FirebaseService:
                 try:
                     data = doc.to_dict()
                     
-                    # Parse dates
                     posted_date = cls._parse_date(data.get('openDate') or data.get('postedDate'))
                     close_date = cls._parse_date(data.get('closeDate') or data.get('deadline'))
                     
-                    # Create or update opportunity
                     opportunity, created = Opportunity.objects.update_or_create(
                         firebase_id=doc.id,
                         collection_name=collection_name,
@@ -117,11 +109,6 @@ class FirebaseService:
                     
                     synced_count += 1
                     
-                    if created:
-                        logger.info(f"Created new opportunity: {opportunity.title[:50]}")
-                    else:
-                        logger.debug(f"Updated opportunity: {opportunity.title[:50]}")
-                        
                 except Exception as e:
                     logger.error(f"Error syncing opportunity {doc.id}: {e}")
                     continue
@@ -134,9 +121,7 @@ class FirebaseService:
     
     @classmethod
     def sync_all_opportunities(cls, collections: list = None, limit_per_collection: int = None):
-        """
-        Sync opportunities from all or specified collections
-        """
+        """Sync opportunities from all or specified collections"""
         if collections is None:
             collections = ["SAM", "grants.gov", "grantwatch", "PND_RFPs", "rfpmart", "bid"]
         
@@ -155,9 +140,7 @@ class FirebaseService:
     
     @classmethod
     def get_user_profile_from_firebase(cls, firebase_uid: str):
-        """
-        Get user profile data from Firebase
-        """
+        """Get user profile data from Firebase"""
         db = cls.get_db()
         if not db:
             return None
@@ -178,15 +161,12 @@ class FirebaseService:
     
     @classmethod
     def sync_user_profile(cls, firebase_uid: str, django_user):
-        """
-        Sync user profile from Firebase to Django
-        """
+        """Sync user profile from Firebase to Django"""
         firebase_data = cls.get_user_profile_from_firebase(firebase_uid)
         
         if not firebase_data:
             return None
         
-        # Create or update Django profile
         profile, created = UserProfile.objects.update_or_create(
             firebase_uid=firebase_uid,
             defaults={
@@ -201,18 +181,11 @@ class FirebaseService:
             }
         )
         
-        if created:
-            logger.info(f"Created new profile for Firebase UID: {firebase_uid}")
-        else:
-            logger.info(f"Updated profile for Firebase UID: {firebase_uid}")
-        
         return profile
     
     @classmethod
     def verify_firebase_token(cls, id_token: str):
-        """
-        Verify Firebase ID token and return user info
-        """
+        """Verify Firebase ID token and return user info"""
         if not cls._initialized:
             cls.initialize()
         
@@ -220,7 +193,7 @@ class FirebaseService:
             return None
         
         try:
-            decoded_token = auth.verify_id_token(id_token)
+            decoded_token = firebase_auth.verify_id_token(id_token)
             return decoded_token
         except Exception as e:
             logger.error(f"Error verifying Firebase token: {e}")
@@ -237,11 +210,9 @@ class FirebaseService:
         
         if isinstance(date_value, str):
             try:
-                # Try ISO format
                 return datetime.fromisoformat(date_value.replace('Z', '+00:00')).date()
             except:
                 try:
-                    # Try common formats
                     for fmt in ['%Y-%m-%d', '%m/%d/%Y', '%d/%m/%Y']:
                         try:
                             return datetime.strptime(date_value[:10], fmt).date()
