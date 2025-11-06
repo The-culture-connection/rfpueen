@@ -1,0 +1,207 @@
+from django.db import models
+from django.contrib.auth.models import User
+import json
+
+
+class UserProfile(models.Model):
+    """Extended user profile with matching preferences"""
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
+    firebase_uid = models.CharField(max_length=128, unique=True, null=True, blank=True)
+    
+    # Profile information
+    organization_name = models.CharField(max_length=255, blank=True)
+    organization_type = models.CharField(max_length=100, blank=True)
+    city = models.CharField(max_length=100, blank=True)
+    state = models.CharField(max_length=100, blank=True)
+    
+    # Funding preferences (stored as JSON)
+    funding_types = models.JSONField(default=list, blank=True)  # ["Grants", "Contracts", "RFPs", "Bids"]
+    interests_main = models.JSONField(default=list, blank=True)  # Main keywords
+    interests_sub = models.JSONField(default=list, blank=True)  # Sub keywords
+    
+    # Statistics
+    total_applied = models.IntegerField(default=0)
+    total_saved = models.IntegerField(default=0)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        return f"{self.user.email} - Profile"
+    
+    class Meta:
+        db_table = 'user_profiles'
+
+
+class Opportunity(models.Model):
+    """Opportunity model synced from Firebase"""
+    # Identifiers
+    firebase_id = models.CharField(max_length=255, unique=True)
+    collection_name = models.CharField(max_length=100)  # SAM, grants.gov, etc.
+    
+    # Basic info
+    title = models.TextField()
+    description = models.TextField(blank=True, null=True)
+    summary = models.TextField(blank=True, null=True)
+    
+    # Organization info
+    agency = models.CharField(max_length=255, blank=True, null=True)
+    department = models.CharField(max_length=255, blank=True, null=True)
+    
+    # Dates
+    posted_date = models.DateField(null=True, blank=True)
+    close_date = models.DateField(null=True, blank=True)
+    deadline = models.DateField(null=True, blank=True)
+    
+    # Location
+    city = models.CharField(max_length=100, blank=True, null=True)
+    state = models.CharField(max_length=100, blank=True, null=True)
+    place = models.CharField(max_length=255, blank=True, null=True)
+    
+    # URLs
+    url = models.URLField(max_length=1000, blank=True, null=True)
+    synopsis_url = models.URLField(max_length=1000, blank=True, null=True)
+    link = models.URLField(max_length=1000, blank=True, null=True)
+    
+    # Contact info
+    contact_email = models.EmailField(blank=True, null=True)
+    contact_phone = models.CharField(max_length=50, blank=True, null=True)
+    
+    # Additional data stored as JSON
+    extra_data = models.JSONField(default=dict, blank=True)
+    
+    # Metadata
+    last_synced = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    def __str__(self):
+        return f"{self.title[:50]} ({self.collection_name})"
+    
+    @property
+    def urgency_bucket(self):
+        """Calculate urgency bucket based on deadline"""
+        if not self.close_date and not self.deadline:
+            return "ongoing"
+        
+        from datetime import datetime, timedelta
+        deadline = self.close_date or self.deadline
+        days_until = (deadline - datetime.now().date()).days
+        
+        if days_until <= 30:
+            return "urgent"
+        elif days_until <= 92:
+            return "soon"
+        return "ongoing"
+    
+    class Meta:
+        db_table = 'opportunities'
+        ordering = ['-posted_date']
+        indexes = [
+            models.Index(fields=['collection_name']),
+            models.Index(fields=['close_date']),
+            models.Index(fields=['firebase_id']),
+        ]
+
+
+class OpportunityMatch(models.Model):
+    """Stores matched opportunities for users with relevance scores"""
+    user_profile = models.ForeignKey(UserProfile, on_delete=models.CASCADE, related_name='matches')
+    opportunity = models.ForeignKey(Opportunity, on_delete=models.CASCADE, related_name='matches')
+    
+    # Matching metadata
+    relevance_score = models.FloatField(default=0.0)
+    win_rate = models.FloatField(default=0.0, help_text="Calculated win rate percentage")
+    win_rate_reasoning = models.JSONField(default=dict, blank=True, help_text="Breakdown of win rate calculation")
+    
+    # Status
+    is_viewed = models.BooleanField(default=False)
+    is_dismissed = models.BooleanField(default=False)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        return f"{self.user_profile.user.email} - {self.opportunity.title[:30]}"
+    
+    class Meta:
+        db_table = 'opportunity_matches'
+        unique_together = [['user_profile', 'opportunity']]
+        ordering = ['-relevance_score', '-created_at']
+
+
+class Application(models.Model):
+    """Tracks user applications to opportunities"""
+    user_profile = models.ForeignKey(UserProfile, on_delete=models.CASCADE, related_name='applications')
+    opportunity = models.ForeignKey(Opportunity, on_delete=models.CASCADE, related_name='applications')
+    
+    # Application details
+    application_url = models.URLField(max_length=1000, blank=True, null=True)
+    application_instructions = models.TextField(blank=True, null=True)
+    
+    # Status tracking
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('submitted', 'Submitted'),
+        ('in_review', 'In Review'),
+        ('accepted', 'Accepted'),
+        ('rejected', 'Rejected'),
+    ]
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    
+    # Notes
+    user_notes = models.TextField(blank=True, null=True)
+    
+    # Timestamps
+    applied_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        return f"{self.user_profile.user.email} - {self.opportunity.title[:30]}"
+    
+    class Meta:
+        db_table = 'applications'
+        unique_together = [['user_profile', 'opportunity']]
+        ordering = ['-applied_at']
+
+
+class SavedOpportunity(models.Model):
+    """Tracks opportunities saved for later by users"""
+    user_profile = models.ForeignKey(UserProfile, on_delete=models.CASCADE, related_name='saved_opportunities')
+    opportunity = models.ForeignKey(Opportunity, on_delete=models.CASCADE, related_name='saved_by')
+    
+    # Notes
+    user_notes = models.TextField(blank=True, null=True)
+    
+    # Timestamps
+    saved_at = models.DateTimeField(auto_now_add=True)
+    
+    def __str__(self):
+        return f"{self.user_profile.user.email} - {self.opportunity.title[:30]} (Saved)"
+    
+    class Meta:
+        db_table = 'saved_opportunities'
+        unique_together = [['user_profile', 'opportunity']]
+        ordering = ['-saved_at']
+
+
+class ApplicationPathway(models.Model):
+    """Stores scraped application pathway information"""
+    opportunity = models.ForeignKey(Opportunity, on_delete=models.CASCADE, related_name='pathways')
+    
+    # Scraped data
+    application_url = models.URLField(max_length=1000)
+    pathway_steps = models.JSONField(default=list, help_text="List of steps to reach application")
+    confidence_score = models.FloatField(default=0.0, help_text="Confidence that this is the correct pathway")
+    
+    # Metadata
+    last_verified = models.DateTimeField(auto_now=True)
+    is_active = models.BooleanField(default=True)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    def __str__(self):
+        return f"Pathway for {self.opportunity.title[:30]}"
+    
+    class Meta:
+        db_table = 'application_pathways'
+        ordering = ['-confidence_score']
