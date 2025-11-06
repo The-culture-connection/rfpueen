@@ -1,0 +1,189 @@
+<!-- ===== REGISTRATION 1 (Squarespace + Firebase Auth + Firestore) ===== -->
+<div id="reg1"
+     style="max-width:640px;margin:40px auto;padding:24px;border:1px solid #e5e7eb;border-radius:14px;font-family:Inter,system-ui,Arial,sans-serif;display:none">
+  <h2 style="margin:0 0 12px;">Tell us about your fundraising</h2>
+  <p style="margin:0 16px 20px 0;color:#6b7280">We’ll use this to find the best opportunities and prefill applications.</p>
+
+  <!-- What are you fundraising for -->
+  <label style="display:block;margin:12px 0 6px;">What are you fundraising for?</label>
+  <select id="cc-purpose" style="width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:10px">
+    <option value="">Select one…</option>
+    <option>Business/Startup</option>
+    <option>Nonprofit/Project</option>
+    <option>Student/Research</option>
+  </select>
+
+  <!-- Location -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px">
+    <div>
+      <label style="display:block;margin:12px 0 6px;">Country</label>
+      <input id="cc-country" placeholder="United States / Canada" style="width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:10px">
+    </div>
+    <div>
+      <label style="display:block;margin:12px 0 6px;">State/Province</label>
+      <input id="cc-region" placeholder="e.g., Ohio / Ontario" style="width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:10px">
+    </div>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px">
+    <div>
+      <label style="display:block;margin:12px 0 6px;">City</label>
+      <input id="cc-city" placeholder="e.g., Cincinnati / Toronto" style="width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:10px">
+    </div>
+    <div>
+      <label style="display:block;margin:12px 0 6px;">Postal/ZIP</label>
+      <input id="cc-postal" placeholder="e.g., 45220 / M5V 2T6" style="width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:10px">
+    </div>
+  </div>
+
+  <!-- Timeline -->
+  <label style="display:block;margin:16px 0 6px;">Timeline</label>
+  <select id="cc-timeline" style="width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:10px">
+    <option value="">Select one…</option>
+    <option>Urgent (≤30 days)</option>
+    <option>Soon (1–3 months)</option>
+    <option>Ongoing</option>
+  </select>
+
+  <!-- Actions -->
+  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:18px">
+    <button id="cc-continue"
+            style="padding:12px 16px;border:0;border-radius:10px;background:#111827;color:#fff;cursor:pointer">
+      Continue
+    </button>
+    <small id="cc-status" style="align-self:center;color:#6b7280">Please complete all fields.</small>
+  </div>
+</div>
+
+<!-- Minimal signed-out guard -->
+<div id="reg1-guard" style="max-width:640px;margin:40px auto;padding:16px;color:#6b7280;display:none">
+  You need to sign in first. <a href="/signin">Go to sign in</a>
+</div>
+
+<!-- Firebase SDKs (modular) -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import {
+    getAuth,
+    onAuthStateChanged,
+    setPersistence,
+    browserLocalPersistence,
+  } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+  import {
+    getFirestore,
+    doc,
+    setDoc,
+    serverTimestamp,
+    getDoc,
+    updateDoc
+  } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+  // --- Your Firebase config (from earlier) ---
+  const firebaseConfig = {
+    apiKey: "AIzaSyDbkrUWV13zBvl4L2lu5Qw5aLYbC9LCjJk",
+    authDomain: "therfpqueen-f11fd.firebaseapp.com",
+    projectId: "therfpqueen-f11fd",
+    storageBucket: "therfpqueen-f11fd.firebasestorage.app",
+    messagingSenderId: "173138212955",
+    appId: "1:173138212955:web:2753c72dc7be65cf14677e",
+    measurementId: "G-83PDWFH42F"
+  };
+
+  // --- Init ---
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+  await setPersistence(auth, browserLocalPersistence);
+
+  // --- DOM ---
+  const $ = (id) => document.getElementById(id);
+  const wrap = $("reg1");
+  const guard = $("reg1-guard");
+  const statusEl = $("cc-status");
+  const purposeEl = $("cc-purpose");
+  const countryEl = $("cc-country");
+  const regionEl  = $("cc-region");
+  const cityEl    = $("cc-city");
+  const postalEl  = $("cc-postal");
+  const timelineEl= $("cc-timeline");
+  const continueBtn = $("cc-continue");
+
+  const setStatus = (msg, isError=false) => {
+    statusEl.textContent = msg;
+    statusEl.style.color = isError ? "#b91c1c" : "#6b7280";
+  };
+
+  // --- Require Auth + prefill if user has partial profile ---
+  let currentUser = null;
+  onAuthStateChanged(auth, async (user) => {
+    if (!user) {
+      guard.style.display = "block";
+      wrap.style.display = "none";
+      return;
+    }
+    currentUser = user;
+    guard.style.display = "none";
+    wrap.style.display = "block";
+
+    // Optional: prefill existing values if user visited before
+    try {
+      const ref = doc(db, "profiles", user.uid);
+      const snap = await getDoc(ref);
+      if (snap.exists()) {
+        const d = snap.data() || {};
+        if (d.purpose)   purposeEl.value = d.purpose;
+        if (d.country)   countryEl.value = d.country;
+        if (d.region)    regionEl.value  = d.region;
+        if (d.city)      cityEl.value    = d.city;
+        if (d.postal)    postalEl.value  = d.postal;
+        if (d.timeline)  timelineEl.value= d.timeline;
+      }
+    } catch(e) {
+      // silent prefill failure
+    }
+  });
+
+  // --- Validate + Save + Go to /registration2 ---
+  function validate() {
+    if (!purposeEl.value)  return "Please choose what you’re fundraising for.";
+    if (!countryEl.value)  return "Please enter your country.";
+    if (!regionEl.value)   return "Please enter your state/province.";
+    if (!cityEl.value)     return "Please enter your city.";
+    if (!postalEl.value)   return "Please enter your postal/ZIP.";
+    if (!timelineEl.value) return "Please choose a timeline.";
+    return null;
+  }
+
+  continueBtn.addEventListener("click", async () => {
+    try {
+      if (!currentUser) return (window.location.href = "/signin");
+      const err = validate();
+      if (err) return setStatus(err, true);
+
+      setStatus("Saving…");
+
+      const ref = doc(db, "profiles", currentUser.uid);
+      // Upsert profile (create or update)
+      await setDoc(ref, {
+        uid: currentUser.uid,
+        email: currentUser.email || null,
+        purpose:   purposeEl.value,
+        country:   countryEl.value.trim(),
+        region:    regionEl.value.trim(),
+        city:      cityEl.value.trim(),
+        postal:    postalEl.value.trim(),
+        timeline:  timelineEl.value,
+        onboardingStep: 1,
+        updatedAt: serverTimestamp(),
+        createdAt: serverTimestamp()
+      }, { merge: true });
+
+      // (Optional) mark step advanced
+      await updateDoc(ref, { onboardingStep: 2, updatedAt: serverTimestamp() });
+
+      // Next screen
+      window.location.assign("/registration2");
+    } catch (e) {
+      setStatus(e?.message || "Couldn’t save. Please try again.", true);
+    }
+  });
+</script>

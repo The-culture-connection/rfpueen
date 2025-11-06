@@ -1,0 +1,139 @@
+<div id="dashboard-root" style="min-height:160px;font-family:Inter,system-ui,Arial,sans-serif"></div>
+
+<script>
+(function(){
+  const root = document.getElementById("dashboard-root");
+  const state = { 
+    email: "",
+    appliedCount: 0,
+    savedCount: 0
+  };
+
+  function show(html){
+    root.innerHTML = html;
+  }
+
+  function status(msg){
+    show(`<div style="max-width:960px;margin:20px auto;padding:14px;border:1px solid #e5e7eb;border-radius:12px;background:#fff">${msg}</div>`);
+  }
+
+  function render(){
+    const bar = `
+      <div style="max-width:960px;margin:8px auto 0;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;padding:12px 0">
+        <div style="color:#6b7280">
+          <strong>Dashboard</strong> • Signed in as ${state.email||""}
+        </div>
+        <div style="display:flex;gap:8px">
+          <a href="/explore" style="padding:8px 12px;border:1px solid #e5e7eb;border-radius:10px;background:#685bc6;color:#fff;text-decoration:none;cursor:pointer;font-weight:600">Explore</a>
+          <button id="signoutBtn" style="padding:8px 12px;border:1px solid #e5e7eb;border-radius:10px;background:#fff;cursor:pointer">Sign out</button>
+        </div>
+      </div>`;
+    
+    const cards = `
+      <div style="max-width:960px;margin:20px auto;display:grid;grid-template-columns:repeat(auto-fit, minmax(280px, 1fr));gap:20px">
+        <a href="/explore" style="text-decoration:none;color:inherit">
+          <div style="border:1px solid #e5e7eb;border-radius:14px;padding:24px;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,0.1);cursor:pointer;transition:transform 0.2s;hover:transform:translateY(-2px)">
+            <div style="font-size:2rem;margin-bottom:8px">🔍</div>
+            <h3 style="margin:0 0 8px;color:#111827">Explore Opportunities</h3>
+            <p style="margin:0;color:#6b7280;font-size:0.9rem">Find new opportunities matched to your profile</p>
+          </div>
+        </a>
+        <a href="/dashboard-applied" style="text-decoration:none;color:inherit">
+          <div style="border:1px solid #e5e7eb;border-radius:14px;padding:24px;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,0.1);cursor:pointer;transition:transform 0.2s;hover:transform:translateY(-2px)">
+            <div style="font-size:2rem;margin-bottom:8px">📝</div>
+            <h3 style="margin:0 0 8px;color:#111827">Applied Opportunities</h3>
+            <p style="margin:0;color:#6b7280;font-size:0.9rem">${state.appliedCount} opportunity${state.appliedCount !== 1 ? 'ies' : 'y'} you've applied to</p>
+          </div>
+        </a>
+        <a href="/dashboard-saved" style="text-decoration:none;color:inherit">
+          <div style="border:1px solid #e5e7eb;border-radius:14px;padding:24px;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,0.1);cursor:pointer;transition:transform 0.2s;hover:transform:translateY(-2px)">
+            <div style="font-size:2rem;margin-bottom:8px">💾</div>
+            <h3 style="margin:0 0 8px;color:#111827">Saved Opportunities</h3>
+            <p style="margin:0;color:#6b7280;font-size:0.9rem">${state.savedCount} opportunity${state.savedCount !== 1 ? 'ies' : 'y'} saved for later</p>
+          </div>
+        </a>
+      </div>`;
+    
+    show(`${bar}${cards}`);
+
+    const so = document.getElementById("signoutBtn");
+    if (so) so.onclick = async ()=>{ try{ await firebase.auth().signOut(); location.reload(); }catch(e){ console.error(e); } };
+  }
+
+  async function loadCounts(){
+    try {
+      const user = firebase.auth().currentUser;
+      if (!user) throw new Error("Please sign in");
+      const db = firebase.firestore();
+
+      const [appliedSnap, savedSnap] = await Promise.all([
+        db.collection("profiles").doc(user.uid).collection("Applied").get(),
+        db.collection("profiles").doc(user.uid).collection("Saved").get()
+      ]);
+
+      state.appliedCount = appliedSnap.size;
+      state.savedCount = savedSnap.size;
+      render();
+    } catch (e) {
+      console.error("Error loading counts:", e);
+      render();
+    }
+  }
+
+  // Boot
+  (async function boot(){
+    status("Loading...");
+    function add(src){ return new Promise((res,rej)=>{ const s=document.createElement("script"); s.src=src; s.onload=res; s.onerror=()=>rej(new Error("Failed to load "+src)); document.head.appendChild(s); }); }
+    
+    try{
+      await add("https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js");
+      await add("https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js");
+      await add("https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js");
+    }catch(e){ return show(`<p style="color:#b91c1c">Script load error: ${e.message}</p>`); }
+
+    const cfg = {
+      apiKey: "AIzaSyDbkrUWV13zBvl4L2lu5Qw5aLYbC9LCjJk",
+      authDomain: "therfpqueen.firebaseapp.com",
+      projectId: "therfpqueen-f11fd"
+    };
+
+    try{
+      firebase.initializeApp(cfg);
+      const auth = firebase.auth();
+
+      auth.onAuthStateChanged(async (user)=>{
+        if(!user){
+          show(`
+            <div style="max-width:420px;margin:40px auto;padding:20px;border:1px solid #e5e7eb;border-radius:14px;background:#fff;">
+              <h3 style="margin:0 0 8px;">Sign in</h3>
+              <div id="err" style="display:none;margin-bottom:10px;color:#b91c1c;"></div>
+              <input id="email" type="email" placeholder="Email" autocomplete="email"
+                     style="width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:10px;margin-bottom:8px;">
+              <input id="password" type="password" placeholder="Password" autocomplete="current-password"
+                     style="width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:10px;margin-bottom:12px;">
+              <button id="loginBtn" style="width:100%;padding:12px;border:0;border-radius:12px;background:#685bc6;color:#fff;font-weight:600;cursor:pointer">
+                Log in
+              </button>
+            </div>`);
+          const lb = document.getElementById("loginBtn");
+          lb.onclick = async ()=>{
+            const err = document.getElementById("err");
+            err.style.display="none";
+            try {
+              const email = document.getElementById("email").value.trim();
+              const pw = document.getElementById("password").value;
+              await auth.signInWithEmailAndPassword(email,pw);
+            } catch(e){ err.textContent=(e?.message||"Login failed").replace("Firebase:","").trim(); err.style.display="block"; }
+          };
+          return;
+        }
+
+        state.email = user.email || "";
+        await loadCounts();
+      });
+    }catch(e){
+      show(`<p style="color:#b91c1c">Firebase init error: ${e.message||e}</p>`);
+    }
+  })();
+})();
+</script>

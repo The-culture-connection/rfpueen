@@ -1,0 +1,507 @@
+<div id="explore-root" style="min-height:160px;font-family:Inter,system-ui,Arial,sans-serif"></div>
+
+<script>
+(function(){
+  const root = document.getElementById("explore-root");
+  const state = { 
+    logs: [], 
+    items: [], 
+    shown: 0, 
+    pageSize: 20, 
+    email: "", 
+    loading: false,
+    profile: null
+  };
+
+  function show(html){
+    root.innerHTML = html + `<pre id="cc-debug" style="max-width:960px;margin:12px auto;padding:10px;border:1px dashed #e5e7eb;border-radius:10px;background:#f9fafb;color:#374151;white-space:pre-wrap;font:12px/1.4 ui-monospace,monospace;display:none">${state.logs.join("\n")}</pre>`;
+  }
+  function log(m){ state.logs.push(String(m)); const d=document.getElementById("cc-debug"); if(d) d.textContent = state.logs.join("\n"); }
+  function status(msg){ show(`<div style="max-width:960px;margin:20px auto;padding:14px;border:1px solid #e5e7eb;border-radius:12px;background:#fff">${msg}</div>`); }
+
+  // Collection mapping based on funding types
+  const COLLECTION_MAP = {
+    "Contracts": ["SAM"],
+    "Grants": ["grants.gov", "grantwatch"],
+    "RFPs": ["PND_RFPs", "rfpmart"],
+    "Bids": ["bid"]
+  };
+
+  // Helper functions
+  function parseDate(s){
+    if(!s) return null;
+    try{
+      const d = new Date(/^\d{4}-\d{2}-\d{2}/.test(s)? s.slice(0,10) : s);
+      return isNaN(+d) ? null : d;
+    }catch{ return null; }
+  }
+
+  function bucketOf(deadline){
+    const d = parseDate(deadline); if(!d) return "ongoing";
+    const days = Math.ceil((d - new Date())/86400000);
+    if (days <= 30) return "urgent";
+    if (days <= 92) return "soon";
+    return "ongoing";
+  }
+
+  // Calculate relevance score based on keyword matches
+  function calculateScore(opp, interestsMain, interestsSub) {
+    let score = 0;
+    const searchText = [
+      opp.title || "",
+      opp.description || "",
+      opp.agency || "",
+      opp.department || "",
+      opp.summary || ""
+    ].join(" ").toLowerCase();
+
+    const allKeywords = [
+      ...(interestsMain || []).map(k => k.toLowerCase()),
+      ...(interestsSub || []).map(k => k.toLowerCase())
+    ];
+
+    allKeywords.forEach(keyword => {
+      const regex = new RegExp(`\\b${keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
+      const matches = searchText.match(regex);
+      if (matches) {
+        score += matches.length;
+      }
+    });
+
+    return score;
+  }
+
+  // Match opportunities based on profile
+  async function matchOpportunities(db, profile) {
+    const fundingTypes = profile.fundingTypes || [];
+    const interestsMain = profile.interestsMain || [];
+    const interestsSub = profile.interestsSub || profile.grantsByInterest || [];
+
+    if (!fundingTypes.length) {
+      log("No funding types selected");
+      return [];
+    }
+
+    // Get collections to search
+    const collectionsToSearch = new Set();
+    fundingTypes.forEach(ft => {
+      const cols = COLLECTION_MAP[ft] || [];
+      cols.forEach(c => collectionsToSearch.add(c));
+    });
+
+    log(`Searching collections: ${Array.from(collectionsToSearch).join(", ")}`);
+    log(`Matching keywords: ${interestsMain.length} main, ${interestsSub.length} sub`);
+
+    const allOpportunities = [];
+    const promises = [];
+
+    // Fetch from each collection
+    for (const colName of collectionsToSearch) {
+      promises.push(
+        db.collection(colName).get().then(snap => {
+          snap.docs.forEach(doc => {
+            const data = doc.data();
+            const score = calculateScore(data, interestsMain, interestsSub);
+            if (score > 0) {
+              allOpportunities.push({
+                id: doc.id,
+                collection: colName,
+                score: score,
+                ...data
+              });
+            }
+          });
+          log(`Found ${snap.docs.length} opportunities in ${colName}, ${allOpportunities.filter(o => o.collection === colName).length} matched`);
+        }).catch(e => {
+          log(`Error fetching ${colName}: ${e.message}`);
+        })
+      );
+    }
+
+    await Promise.all(promises);
+
+    // Sort by score descending
+    allOpportunities.sort((a, b) => b.score - a.score);
+
+    return allOpportunities;
+  }
+
+  // Opportunity card with Apply, Pass, Save buttons
+  function card(o, index){
+    const posted = o.openDate || o.postedDate;
+    const due = o.closeDate || o.deadline;
+    const urgency = bucketOf(due);
+    const urgencyColor = urgency === "urgent" ? "#dc2626" : urgency === "soon" ? "#f59e0b" : "#6b7280";
+    
+    return `
+      <div id="opp-${index}" style="border:1px solid #e5e7eb;border-radius:14px;padding:20px;margin:12px 0;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
+          <span style="font-size:.75rem;padding:4px 8px;border:1px solid #e5e7eb;border-radius:8px;background:#f9fafb;text-transform:uppercase">${o.collection||"match"}</span>
+          <span style="font-size:.75rem;padding:4px 8px;border:1px solid ${urgencyColor};border-radius:8px;background:${urgency === "urgent" ? "#fee2e2" : urgency === "soon" ? "#fef3c7" : "#f9fafb"};color:${urgencyColor};font-weight:600">${urgency}</span>
+          ${o.score ? `<span style="font-size:.75rem;padding:4px 8px;border:1px solid #685bc6;border-radius:8px;background:#f3f4f6;color:#685bc6">Match: ${o.score}</span>` : ""}
+        </div>
+        <div style="font-weight:600;font-size:1.25rem;margin-bottom:6px;color:#111827">${o.title||"Untitled Opportunity"}</div>
+        <div style="color:#6b7280;margin-bottom:8px;font-weight:500">${o.agency||o.department||"Unknown Agency"}</div>
+        <div style="color:#374151;font-size:0.9rem;line-height:1.6;margin-bottom:12px">
+          ${o.description ? (o.description.length > 200 ? o.description.substring(0, 200) + "..." : o.description) : (o.summary || "")}
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(150px, 1fr));gap:8px;margin-bottom:12px;font-size:0.85rem;color:#6b7280">
+          <div><strong>Posted:</strong> ${posted ? new Date(posted).toLocaleDateString() : "—"}</div>
+          <div><strong>Deadline:</strong> ${due ? new Date(due).toLocaleDateString() : "—"}</div>
+          <div><strong>Location:</strong> ${o.place || [o.city, o.state].filter(Boolean).join(", ") || "—"}</div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+          <button data-action="apply" data-index="${index}" data-id="${o.id}" data-collection="${(o.collection || "").replace(/"/g, '&quot;')}" 
+                  style="padding:10px 16px;border:0;border-radius:10px;background:#685bc6;color:#fff;font-weight:600;cursor:pointer;flex:1;min-width:100px">
+            Apply
+          </button>
+          <button data-action="save" data-index="${index}" data-id="${o.id}" data-collection="${(o.collection || "").replace(/"/g, '&quot;')}" 
+                  style="padding:10px 16px;border:1px solid #e5e7eb;border-radius:10px;background:#fff;color:#111827;font-weight:600;cursor:pointer;flex:1;min-width:100px">
+            Save for Later
+          </button>
+          <button data-action="pass" data-index="${index}" 
+                  style="padding:10px 16px;border:1px solid #e5e7eb;border-radius:10px;background:#fff;color:#6b7280;font-weight:600;cursor:pointer;flex:1;min-width:100px">
+            Pass
+          </button>
+        </div>
+        <div style="margin-top:10px">
+          <a href="${o.url||o.synopsisUrl||o.link||"#"}" target="_blank" rel="noopener" 
+             style="color:#685bc6;text-decoration:none;font-size:0.9rem;font-weight:500">
+            View full details →
+          </a>
+        </div>
+      </div>`;
+  }
+
+  // Action handlers
+  window.handleApply = async function(index, oppId, collection) {
+    const opp = state.items[index];
+    if (!opp) return;
+
+    try {
+      const user = firebase.auth().currentUser;
+      if (!user) throw new Error("Please sign in");
+      const db = firebase.firestore();
+
+      // Check if application form exists
+      const applicationUrl = await findApplicationForm(opp);
+
+      // Store in applied collection
+      await db.collection("profiles").doc(user.uid).collection("Applied").doc(oppId).set({
+        opportunityId: oppId,
+        collection: collection,
+        title: opp.title,
+        agency: opp.agency || opp.department,
+        url: opp.url || opp.synopsisUrl || opp.link,
+        appliedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        applicationUrl: applicationUrl,
+        applicationInstructions: applicationUrl ? null : generateInstructions(opp),
+        ...opp
+      });
+
+      // Remove from current view
+      state.items.splice(index, 1);
+      state.shown = Math.min(state.shown, state.items.length);
+      render(state.items, []);
+
+      // Show application modal or redirect
+      if (applicationUrl) {
+        window.open(applicationUrl, '_blank');
+      } else {
+        showApplicationInstructions(opp, generateInstructions(opp));
+      }
+    } catch (e) {
+      log("Apply error: " + e.message);
+      alert("Error applying: " + e.message);
+    }
+  };
+
+  window.handleSave = async function(index, oppId, collection) {
+    const opp = state.items[index];
+    if (!opp) return;
+
+    try {
+      const user = firebase.auth().currentUser;
+      if (!user) throw new Error("Please sign in");
+      const db = firebase.firestore();
+
+      // Store in saved collection
+      await db.collection("profiles").doc(user.uid).collection("Saved").doc(oppId).set({
+        opportunityId: oppId,
+        collection: collection,
+        title: opp.title,
+        agency: opp.agency || opp.department,
+        url: opp.url || opp.synopsisUrl || opp.link,
+        savedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        ...opp
+      });
+
+      // Remove from current view
+      state.items.splice(index, 1);
+      state.shown = Math.min(state.shown, state.items.length);
+      render(state.items, []);
+
+      log(`Saved opportunity: ${opp.title}`);
+    } catch (e) {
+      log("Save error: " + e.message);
+      alert("Error saving: " + e.message);
+    }
+  };
+
+  window.handlePass = function(index) {
+    state.items.splice(index, 1);
+    state.shown = Math.min(state.shown, state.items.length);
+    render(state.items, []);
+  };
+
+  // Find application form URL
+  async function findApplicationForm(opp) {
+    // Check common fields for application URLs
+    const possibleUrls = [
+      opp.applicationUrl,
+      opp.applyUrl,
+      opp.formUrl,
+      opp.submissionUrl,
+      opp.url
+    ].filter(Boolean);
+
+    for (const url of possibleUrls) {
+      try {
+        // Basic validation - could be enhanced with actual fetch check
+        if (url && (url.includes('form') || url.includes('apply') || url.includes('submit') || url.includes('application'))) {
+          return url;
+        }
+      } catch (e) {
+        log("URL check error: " + e.message);
+      }
+    }
+
+    // Check description for application links
+    const text = (opp.description || opp.summary || "").toLowerCase();
+    const urlMatch = text.match(/https?:\/\/[^\s]+/gi);
+    if (urlMatch && urlMatch.length > 0) {
+      return urlMatch[0];
+    }
+
+    return null;
+  }
+
+  // Generate application instructions when form not found
+  function generateInstructions(opp) {
+    const instructions = [];
+    
+    if (opp.url || opp.synopsisUrl || opp.link) {
+      instructions.push(`Visit the opportunity page: ${opp.url || opp.synopsisUrl || opp.link}`);
+    }
+    
+    if (opp.agency || opp.department) {
+      instructions.push(`Contact ${opp.agency || opp.department} directly for application instructions`);
+    }
+    
+    if (opp.contactEmail) {
+      instructions.push(`Email: ${opp.contactEmail}`);
+    }
+    
+    if (opp.contactPhone) {
+      instructions.push(`Phone: ${opp.contactPhone}`);
+    }
+    
+    if (opp.closeDate || opp.deadline) {
+      instructions.push(`Application deadline: ${new Date(opp.closeDate || opp.deadline).toLocaleDateString()}`);
+    }
+
+    return instructions.length > 0 ? instructions.join("\n") : "Check the opportunity page for application details.";
+  }
+
+  // Show application instructions modal
+  function showApplicationInstructions(opp, instructions) {
+    const modal = `
+      <div id="app-modal" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px">
+        <div style="background:#fff;border-radius:14px;padding:24px;max-width:600px;width:100%;max-height:80vh;overflow:auto">
+          <h2 style="margin:0 0 12px">Application Instructions</h2>
+          <h3 style="margin:0 0 8px;font-size:1.1rem">${opp.title || "Opportunity"}</h3>
+          <div style="white-space:pre-line;line-height:1.6;color:#374151;margin-bottom:16px;padding:12px;background:#f9fafb;border-radius:8px">${instructions}</div>
+          ${opp.url ? `<div style="margin-bottom:16px"><a href="${opp.url}" target="_blank" style="color:#685bc6;text-decoration:none;font-weight:600">View Opportunity Page →</a></div>` : ""}
+          <button onclick="document.getElementById('app-modal').remove()" 
+                  style="padding:10px 20px;border:0;border-radius:10px;background:#111827;color:#fff;font-weight:600;cursor:pointer;width:100%">
+            Close
+          </button>
+        </div>
+      </div>`;
+    document.body.insertAdjacentHTML('beforeend', modal);
+  }
+
+  // UI renderer
+  function render(items, errors){
+    const bar = `
+      <div style="max-width:960px;margin:8px auto 0;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;padding:12px 0">
+        <div style="color:#6b7280">Signed in as <strong>${state.email||""}</strong></div>
+        <div style="display:flex;gap:8px">
+          <button id="runBtn" style="padding:8px 12px;border:1px solid #e5e7eb;border-radius:10px;background:#111827;color:#fff;cursor:pointer" ${state.loading ? "disabled" : ""}>
+            ${state.loading ? "Finding Matches..." : "Find Matches"}
+          </button>
+          <a href="/dashboard" style="padding:8px 12px;border:1px solid #e5e7eb;border-radius:10px;background:#fff;color:#111827;text-decoration:none;cursor:pointer">Dashboard</a>
+          <button id="signoutBtn" style="padding:8px 12px;border:1px solid #e5e7eb;border-radius:10px;background:#fff;cursor:pointer">Sign out</button>
+        </div>
+      </div>`;
+    
+    const errHtml = (errors && errors.length)
+      ? `<div style="max-width:960px;margin:16px auto;padding:12px;border:1px solid #fecaca;background:#fef2f2;color:#991b1b;border-radius:10px">
+           <strong>Error:</strong> ${errors.map(e=>String(e)).join("<br>")}
+         </div>` : "";
+    
+    const haveMore = state.shown < items.length;
+    const list = items.slice(0, state.shown).map((o, i) => card(o, i)).join("") || 
+      "<p style='max-width:960px;margin:14px auto;text-align:center;color:#6b7280;padding:40px'>No matches yet. Click <em>Find Matches</em> to discover opportunities.</p>";
+    
+    show(`${bar}${errHtml}<div style="max-width:960px;margin:14px auto;">
+      ${items.length > 0 ? `<div style="margin:16px 0;color:#6b7280;font-size:0.9rem">Showing ${state.shown} of ${items.length} matches</div>` : ""}
+      ${list}
+      ${haveMore ? `<div style="text-align:center;margin:20px 0 30px;">
+        <button id="cc-load-more" style="padding:12px 20px;border:1px solid #d1d5db;border-radius:10px;background:#fff;cursor:pointer;font-weight:600">Load more</button>
+      </div>` : ""}
+    </div>`);
+
+    // Attach handlers
+    const so = document.getElementById("signoutBtn");
+    if (so) so.onclick = async ()=>{ try{ await firebase.auth().signOut(); location.reload(); }catch(e){ log(e.message||e); } };
+
+    const lm = document.getElementById("cc-load-more");
+    if (lm) lm.onclick = ()=>{ state.shown = Math.min(items.length, state.shown + state.pageSize); render(state.items, []); };
+
+    const run = document.getElementById("runBtn");
+    if (run) run.onclick = runMatching;
+
+    // Attach event handlers for action buttons
+    root.querySelectorAll('[data-action="apply"]').forEach(btn => {
+      btn.onclick = () => handleApply(parseInt(btn.dataset.index), btn.dataset.id, btn.dataset.collection);
+    });
+    root.querySelectorAll('[data-action="save"]').forEach(btn => {
+      btn.onclick = () => handleSave(parseInt(btn.dataset.index), btn.dataset.id, btn.dataset.collection);
+    });
+    root.querySelectorAll('[data-action="pass"]').forEach(btn => {
+      btn.onclick = () => handlePass(parseInt(btn.dataset.index));
+    });
+  }
+
+  // Main matching function
+  async function runMatching(){
+    if (state.loading) return;
+    
+    const btn = document.getElementById("runBtn");
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "Finding Matches...";
+    }
+    state.loading = true;
+
+    try{
+      const user = firebase.auth().currentUser;
+      if (!user) throw new Error("Please sign in.");
+      const db = firebase.firestore();
+
+      // Load user profile
+      const profSnap = await db.collection("profiles").doc(user.uid).get();
+      if (!profSnap.exists) {
+        throw new Error("Profile not found. Please complete registration first.");
+      }
+      
+      state.profile = profSnap.data();
+      log("Profile loaded: " + JSON.stringify({
+        fundingTypes: state.profile.fundingTypes,
+        interestsMain: state.profile.interestsMain?.length || 0,
+        interestsSub: state.profile.interestsSub?.length || 0
+      }));
+
+      // Match opportunities
+      const matched = await matchOpportunities(db, state.profile);
+      
+      // Filter out already applied/saved
+      const appliedSnap = await db.collection("profiles").doc(user.uid).collection("Applied").get();
+      const savedSnap = await db.collection("profiles").doc(user.uid).collection("Saved").get();
+      const appliedIds = new Set(appliedSnap.docs.map(d => d.id));
+      const savedIds = new Set(savedSnap.docs.map(d => d.id));
+      
+      const filtered = matched.filter(o => !appliedIds.has(o.id) && !savedIds.has(o.id));
+
+      state.items = filtered;
+      state.shown = Math.min(state.pageSize, state.items.length);
+      render(state.items, []);
+      
+      log(`Found ${filtered.length} new opportunities (${matched.length} total, ${appliedIds.size} applied, ${savedIds.size} saved)`);
+    } catch (e) {
+      log("Matching error: " + e.message);
+      render(state.items, [e.message]);
+    } finally {
+      state.loading = false;
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = "Find Matches";
+      }
+    }
+  }
+
+  // Boot: load Firebase SDKs
+  (async function boot(){
+    status("Loading...");
+    function add(src){ return new Promise((res,rej)=>{ const s=document.createElement("script"); s.src=src; s.onload=res; s.onerror=()=>rej(new Error("Failed to load "+src)); document.head.appendChild(s); }); }
+    
+    try{
+      await add("https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js");
+      await add("https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js");
+      await add("https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js");
+      log("Firebase scripts loaded");
+    }catch(e){ return show(`<p style="color:#b91c1c">Script load error: ${e.message}</p>`); }
+
+    const cfg = {
+      apiKey: "AIzaSyDbkrUWV13zBvl4L2lu5Qw5aLYbC9LCjJk",
+      authDomain: "therfpqueen.firebaseapp.com",
+      projectId: "therfpqueen-f11fd"
+    };
+
+    try{
+      firebase.initializeApp(cfg);
+      const auth = firebase.auth();
+      const db = firebase.firestore();
+
+      status("Checking session…");
+      auth.onAuthStateChanged(async (user)=>{
+        if(!user){
+          show(`
+            <div style="max-width:420px;margin:40px auto;padding:20px;border:1px solid #e5e7eb;border-radius:14px;background:#fff;">
+              <h3 style="margin:0 0 8px;">Sign in</h3>
+              <div id="err" style="display:none;margin-bottom:10px;color:#b91c1c;"></div>
+              <input id="email" type="email" placeholder="Email" autocomplete="email"
+                     style="width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:10px;margin-bottom:8px;">
+              <input id="password" type="password" placeholder="Password" autocomplete="current-password"
+                     style="width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:10px;margin-bottom:12px;">
+              <button id="loginBtn" style="width:100%;padding:12px;border:0;border-radius:12px;background:#685bc6;color:#fff;font-weight:600;cursor:pointer">
+                Log in
+              </button>
+            </div>`);
+          const lb = document.getElementById("loginBtn");
+          lb.onclick = async ()=>{
+            const err = document.getElementById("err");
+            err.style.display="none";
+            try {
+              const email = document.getElementById("email").value.trim();
+              const pw = document.getElementById("password").value;
+              await auth.signInWithEmailAndPassword(email,pw);
+            } catch(e){ err.textContent=(e?.message||"Login failed").replace("Firebase:","").trim(); err.style.display="block"; log(err.textContent); }
+          };
+          return;
+        }
+
+        state.email = user.email || "";
+        render([], []);
+      });
+    }catch(e){
+      show(`<p style="color:#b91c1c">Firebase init error: ${e.message||e}</p>`);
+    }
+  })();
+
+  window.addEventListener("error", (e)=>{ log("[window.error] "+(e.message||e)); });
+  window.addEventListener("unhandledrejection", (e)=>{ log("[unhandled] "+(e.reason?.message||e.reason||e)); });
+
+})();
+</script>

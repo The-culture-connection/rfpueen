@@ -1,0 +1,320 @@
+<div id="dashboard-saved-root" style="min-height:160px;font-family:Inter,system-ui,Arial,sans-serif"></div>
+
+<script>
+(function(){
+  const root = document.getElementById("dashboard-saved-root");
+  const state = { 
+    items: [], 
+    shown: 0, 
+    pageSize: 20, 
+    email: "",
+    loading: true
+  };
+
+  function show(html){
+    root.innerHTML = html;
+  }
+
+  function status(msg){
+    show(`<div style="max-width:960px;margin:20px auto;padding:14px;border:1px solid #e5e7eb;border-radius:12px;background:#fff">${msg}</div>`);
+  }
+
+  function parseDate(s){
+    if(!s) return null;
+    try{
+      const d = new Date(/^\d{4}-\d{2}-\d{2}/.test(s)? s.slice(0,10) : s);
+      return isNaN(+d) ? null : d;
+    }catch{ return null; }
+  }
+
+  function bucketOf(deadline){
+    const d = parseDate(deadline); if(!d) return "ongoing";
+    const days = Math.ceil((d - new Date())/86400000);
+    if (days <= 30) return "urgent";
+    if (days <= 92) return "soon";
+    return "ongoing";
+  }
+
+  // Opportunity card
+  function card(o, index){
+    const due = o.closeDate || o.deadline;
+    const urgency = bucketOf(due);
+    const urgencyColor = urgency === "urgent" ? "#dc2626" : urgency === "soon" ? "#f59e0b" : "#6b7280";
+    const savedDate = o.savedAt ? (o.savedAt.toDate ? o.savedAt.toDate() : new Date(o.savedAt)) : null;
+    
+    return `
+      <div style="border:1px solid #e5e7eb;border-radius:14px;padding:20px;margin:12px 0;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
+          <span style="font-size:.75rem;padding:4px 8px;border:1px solid #e5e7eb;border-radius:8px;background:#f9fafb;text-transform:uppercase">${o.collection||"saved"}</span>
+          <span style="font-size:.75rem;padding:4px 8px;border:1px solid ${urgencyColor};border-radius:8px;background:${urgency === "urgent" ? "#fee2e2" : urgency === "soon" ? "#fef3c7" : "#f9fafb"};color:${urgencyColor};font-weight:600">${urgency}</span>
+          <span style="font-size:.75rem;padding:4px 8px;border:1px solid #3b82f6;border-radius:8px;background:#dbeafe;color:#1e40af;font-weight:600">Saved</span>
+        </div>
+        <div style="font-weight:600;font-size:1.25rem;margin-bottom:6px;color:#111827">${o.title||"Untitled Opportunity"}</div>
+        <div style="color:#6b7280;margin-bottom:8px;font-weight:500">${o.agency||o.department||"Unknown Agency"}</div>
+        <div style="color:#374151;font-size:0.9rem;line-height:1.6;margin-bottom:12px">
+          ${o.description ? (o.description.length > 200 ? o.description.substring(0, 200) + "..." : o.description) : (o.summary || "")}
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(150px, 1fr));gap:8px;margin-bottom:12px;font-size:0.85rem;color:#6b7280">
+          <div><strong>Saved:</strong> ${savedDate ? savedDate.toLocaleDateString() : "—"}</div>
+          <div><strong>Deadline:</strong> ${due ? new Date(due).toLocaleDateString() : "—"}</div>
+          <div><strong>Location:</strong> ${o.place || [o.city, o.state].filter(Boolean).join(", ") || "—"}</div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+          <button onclick="handleApply('${o.opportunityId || o.id}', '${(o.collection || "").replace(/'/g, "\\'")}', ${index})" 
+                  style="padding:10px 16px;border:0;border-radius:10px;background:#685bc6;color:#fff;font-weight:600;cursor:pointer;flex:1;min-width:100px">
+            Apply Now
+          </button>
+          <a href="${o.url||o.synopsisUrl||o.link||"#"}" target="_blank" style="padding:10px 16px;border:1px solid #e5e7eb;border-radius:10px;background:#fff;color:#111827;font-weight:600;text-decoration:none;cursor:pointer;flex:1;min-width:100px;text-align:center">
+            View Details
+          </a>
+          <button onclick="removeSaved('${o.opportunityId || o.id}', ${index})" style="padding:10px 16px;border:1px solid #e5e7eb;border-radius:10px;background:#fff;color:#dc2626;font-weight:600;cursor:pointer;flex:1;min-width:100px">
+            Remove
+          </button>
+        </div>
+      </div>`;
+  }
+
+  window.handleApply = async function(oppId, collection, index) {
+    const opp = state.items[index];
+    if (!opp) return;
+
+    try {
+      const user = firebase.auth().currentUser;
+      if (!user) throw new Error("Please sign in");
+      const db = firebase.firestore();
+
+      // Check if application form exists (same logic as explore page)
+      const applicationUrl = await findApplicationForm(opp);
+
+      // Store in applied collection
+      await db.collection("profiles").doc(user.uid).collection("Applied").doc(oppId).set({
+        opportunityId: oppId,
+        collection: collection,
+        title: opp.title,
+        agency: opp.agency || opp.department,
+        url: opp.url || opp.synopsisUrl || opp.link,
+        appliedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        applicationUrl: applicationUrl,
+        applicationInstructions: applicationUrl ? null : generateInstructions(opp),
+        ...opp
+      });
+
+      // Remove from saved
+      await db.collection("profiles").doc(user.uid).collection("Saved").doc(oppId).delete();
+
+      // Remove from current view
+      state.items.splice(index, 1);
+      state.shown = Math.min(state.shown, state.items.length);
+      render(state.items);
+
+      // Show application modal or redirect
+      if (applicationUrl) {
+        window.open(applicationUrl, '_blank');
+      } else {
+        showApplicationInstructions(opp, generateInstructions(opp));
+      }
+    } catch (e) {
+      alert("Error applying: " + e.message);
+    }
+  };
+
+  async function findApplicationForm(opp) {
+    const possibleUrls = [
+      opp.applicationUrl,
+      opp.applyUrl,
+      opp.formUrl,
+      opp.submissionUrl,
+      opp.url
+    ].filter(Boolean);
+
+    for (const url of possibleUrls) {
+      try {
+        if (url && (url.includes('form') || url.includes('apply') || url.includes('submit') || url.includes('application'))) {
+          return url;
+        }
+      } catch (e) {
+        console.error("URL check error:", e);
+      }
+    }
+
+    const text = (opp.description || opp.summary || "").toLowerCase();
+    const urlMatch = text.match(/https?:\/\/[^\s]+/gi);
+    if (urlMatch && urlMatch.length > 0) {
+      return urlMatch[0];
+    }
+
+    return null;
+  }
+
+  function generateInstructions(opp) {
+    const instructions = [];
+    
+    if (opp.url || opp.synopsisUrl || opp.link) {
+      instructions.push(`Visit the opportunity page: ${opp.url || opp.synopsisUrl || opp.link}`);
+    }
+    
+    if (opp.agency || opp.department) {
+      instructions.push(`Contact ${opp.agency || opp.department} directly for application instructions`);
+    }
+    
+    if (opp.contactEmail) {
+      instructions.push(`Email: ${opp.contactEmail}`);
+    }
+    
+    if (opp.contactPhone) {
+      instructions.push(`Phone: ${opp.contactPhone}`);
+    }
+    
+    if (opp.closeDate || opp.deadline) {
+      instructions.push(`Application deadline: ${new Date(opp.closeDate || opp.deadline).toLocaleDateString()}`);
+    }
+
+    return instructions.length > 0 ? instructions.join("\n") : "Check the opportunity page for application details.";
+  }
+
+  function showApplicationInstructions(opp, instructions) {
+    const modal = `
+      <div id="app-modal" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px">
+        <div style="background:#fff;border-radius:14px;padding:24px;max-width:600px;width:100%;max-height:80vh;overflow:auto">
+          <h2 style="margin:0 0 12px">Application Instructions</h2>
+          <h3 style="margin:0 0 8px;font-size:1.1rem">${opp.title || "Opportunity"}</h3>
+          <div style="white-space:pre-line;line-height:1.6;color:#374151;margin-bottom:16px;padding:12px;background:#f9fafb;border-radius:8px">${instructions}</div>
+          ${opp.url ? `<div style="margin-bottom:16px"><a href="${opp.url}" target="_blank" style="color:#685bc6;text-decoration:none;font-weight:600">View Opportunity Page →</a></div>` : ""}
+          <button onclick="document.getElementById('app-modal').remove()" 
+                  style="padding:10px 20px;border:0;border-radius:10px;background:#111827;color:#fff;font-weight:600;cursor:pointer;width:100%">
+            Close
+          </button>
+        </div>
+      </div>`;
+    document.body.insertAdjacentHTML('beforeend', modal);
+  }
+
+  window.removeSaved = async function(oppId, index) {
+    if (!confirm("Remove this opportunity from your saved list?")) return;
+    
+    try {
+      const user = firebase.auth().currentUser;
+      if (!user) throw new Error("Please sign in");
+      const db = firebase.firestore();
+
+      await db.collection("profiles").doc(user.uid).collection("Saved").doc(oppId).delete();
+
+      state.items.splice(index, 1);
+      state.shown = Math.min(state.shown, state.items.length);
+      render(state.items);
+    } catch (e) {
+      alert("Error removing: " + e.message);
+    }
+  };
+
+  function render(items){
+    const bar = `
+      <div style="max-width:960px;margin:8px auto 0;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;padding:12px 0">
+        <div style="color:#6b7280">
+          <strong>Saved Opportunities</strong> • Signed in as ${state.email||""}
+        </div>
+        <div style="display:flex;gap:8px">
+          <a href="/explore" style="padding:8px 12px;border:1px solid #e5e7eb;border-radius:10px;background:#fff;color:#111827;text-decoration:none;cursor:pointer">Explore</a>
+          <a href="/dashboard-applied" style="padding:8px 12px;border:1px solid #e5e7eb;border-radius:10px;background:#fff;color:#111827;text-decoration:none;cursor:pointer">Applied</a>
+          <button id="signoutBtn" style="padding:8px 12px;border:1px solid #e5e7eb;border-radius:10px;background:#fff;cursor:pointer">Sign out</button>
+        </div>
+      </div>`;
+    
+    const haveMore = state.shown < items.length;
+    const list = items.slice(0, state.shown).map((o, i) => card(o, i)).join("") || 
+      "<p style='max-width:960px;margin:14px auto;text-align:center;color:#6b7280;padding:40px'>No saved opportunities yet. <a href='/explore' style='color:#685bc6'>Explore opportunities</a> to save some.</p>";
+    
+    show(`${bar}
+      <div style="max-width:960px;margin:14px auto;">
+        ${items.length > 0 ? `<div style="margin:16px 0;color:#6b7280;font-size:0.9rem">${items.length} saved opportunity${items.length !== 1 ? 'ies' : 'y'}</div>` : ""}
+        ${list}
+        ${haveMore ? `<div style="text-align:center;margin:20px 0 30px;">
+          <button id="cc-load-more" style="padding:12px 20px;border:1px solid #d1d5db;border-radius:10px;background:#fff;cursor:pointer;font-weight:600">Load more</button>
+        </div>` : ""}
+      </div>`);
+
+    const so = document.getElementById("signoutBtn");
+    if (so) so.onclick = async ()=>{ try{ await firebase.auth().signOut(); location.reload(); }catch(e){ console.error(e); } };
+
+    const lm = document.getElementById("cc-load-more");
+    if (lm) lm.onclick = ()=>{ state.shown = Math.min(items.length, state.shown + state.pageSize); render(state.items); };
+  }
+
+  async function loadSaved(){
+    try {
+      const user = firebase.auth().currentUser;
+      if (!user) throw new Error("Please sign in");
+      const db = firebase.firestore();
+
+      const snap = await db.collection("profiles").doc(user.uid).collection("Saved")
+        .orderBy("savedAt", "desc")
+        .limit(100)
+        .get();
+
+      state.items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      state.shown = Math.min(state.pageSize, state.items.length);
+      render(state.items);
+      state.loading = false;
+    } catch (e) {
+      status("Error loading saved opportunities: " + e.message);
+      state.loading = false;
+    }
+  }
+
+  // Boot
+  (async function boot(){
+    status("Loading...");
+    function add(src){ return new Promise((res,rej)=>{ const s=document.createElement("script"); s.src=src; s.onload=res; s.onerror=()=>rej(new Error("Failed to load "+src)); document.head.appendChild(s); }); }
+    
+    try{
+      await add("https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js");
+      await add("https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js");
+      await add("https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js");
+    }catch(e){ return show(`<p style="color:#b91c1c">Script load error: ${e.message}</p>`); }
+
+    const cfg = {
+      apiKey: "AIzaSyDbkrUWV13zBvl4L2lu5Qw5aLYbC9LCjJk",
+      authDomain: "therfpqueen.firebaseapp.com",
+      projectId: "therfpqueen-f11fd"
+    };
+
+    try{
+      firebase.initializeApp(cfg);
+      const auth = firebase.auth();
+
+      auth.onAuthStateChanged(async (user)=>{
+        if(!user){
+          show(`
+            <div style="max-width:420px;margin:40px auto;padding:20px;border:1px solid #e5e7eb;border-radius:14px;background:#fff;">
+              <h3 style="margin:0 0 8px;">Sign in</h3>
+              <div id="err" style="display:none;margin-bottom:10px;color:#b91c1c;"></div>
+              <input id="email" type="email" placeholder="Email" autocomplete="email"
+                     style="width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:10px;margin-bottom:8px;">
+              <input id="password" type="password" placeholder="Password" autocomplete="current-password"
+                     style="width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:10px;margin-bottom:12px;">
+              <button id="loginBtn" style="width:100%;padding:12px;border:0;border-radius:12px;background:#685bc6;color:#fff;font-weight:600;cursor:pointer">
+                Log in
+              </button>
+            </div>`);
+          const lb = document.getElementById("loginBtn");
+          lb.onclick = async ()=>{
+            const err = document.getElementById("err");
+            err.style.display="none";
+            try {
+              const email = document.getElementById("email").value.trim();
+              const pw = document.getElementById("password").value;
+              await auth.signInWithEmailAndPassword(email,pw);
+            } catch(e){ err.textContent=(e?.message||"Login failed").replace("Firebase:","").trim(); err.style.display="block"; }
+          };
+          return;
+        }
+
+        state.email = user.email || "";
+        await loadSaved();
+      });
+    }catch(e){
+      show(`<p style="color:#b91c1c">Firebase init error: ${e.message||e}</p>`);
+    }
+  })();
+})();
+</script>

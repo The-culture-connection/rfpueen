@@ -1,0 +1,228 @@
+<div id="cc-root" style="min-height:160px;font-family:Inter,system-ui,Arial,sans-serif"></div>
+
+<script>
+(function(){
+  const root = document.getElementById("cc-root");
+  const state = { logs: [], items: [], shown: 0, pageSize: 20, email: "", lastRunId: null };
+
+  function show(html){
+    root.innerHTML = html + `<pre id="cc-debug" style="max-width:960px;margin:12px auto;padding:10px;border:1px dashed #e5e7eb;border-radius:10px;background:#f9fafb;color:#374151;white-space:pre-wrap;font:12px/1.4 ui-monospace,monospace">${state.logs.join("\n")}</pre>`;
+  }
+  function log(m){ state.logs.push(String(m)); const d=document.getElementById("cc-debug"); if(d) d.textContent = state.logs.join("\n"); }
+  function status(msg){ show(`<div style="max-width:960px;margin:20px auto;padding:14px;border:1px solid #e5e7eb;border-radius:12px;background:#fff">${msg}</div>`); }
+
+  // Small helpers
+  function parseDate(s){
+    if(!s) return null;
+    try{
+      const d = new Date(/^\d{4}-\d{2}-\d{2}/.test(s)? s.slice(0,10) : s);
+      return isNaN(+d) ? null : d;
+    }catch{ return null; }
+  }
+  function bucketOf(deadline){
+    const d = parseDate(deadline); if(!d) return "ongoing";
+    const days = Math.ceil((d - new Date())/86400000);
+    if (days <= 30) return "urgent";
+    if (days <= 92) return "soon";
+    return "ongoing";
+  }
+  function card(o){
+    const posted = o.openDate || o.postedDate;
+    const due    = o.closeDate || o.deadline;
+    return `
+      <div style="border:1px solid #e5e7eb;border-radius:14px;padding:16px;margin:10px 0;background:#fff;">
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">
+          <span style="font-size:.75rem;padding:2px 6px;border:1px solid #e5e7eb;border-radius:8px;background:#f9fafb">${o.source||"match"}</span>
+          <span style="font-size:.75rem;padding:2px 6px;border:1px solid #e5e7eb;border-radius:8px;background:#f9fafb">${bucketOf(due)}</span>
+        </div>
+        <div style="font-weight:600;font-size:1.1rem;margin-bottom:4px;">${o.title||""}</div>
+        <div style="color:#6b7280;margin-bottom:6px;">${o.agency||o.department||""}</div>
+        <div><strong>Open/Posted:</strong> ${posted ? new Date(posted).toLocaleDateString() : "—"}</div>
+        <div><strong>Deadline:</strong> ${due ? new Date(due).toLocaleDateString() : "—"}</div>
+        <div><strong>Location:</strong> ${o.place || [o.city, o.state].filter(Boolean).join(", ") || "—"}</div>
+        <div style="margin-top:8px;">
+          <a href="${o.url||o.synopsisUrl||o.link||"#"}" target="_blank" rel="noopener" style="color:#685bc6;">View details</a>
+        </div>
+      </div>`;
+  }
+
+  // UI renderer
+  function render(items, errors){
+    const bar = `
+      <div style="max-width:960px;margin:8px auto 0;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+        <div style="color:#6b7280">Signed in as <strong>${state.email||""}</strong></div>
+        <div style="display:flex;gap:8px">
+          <button id="runBtn" style="padding:8px 12px;border:1px solid #e5e7eb;border-radius:10px;background:#111827;color:#fff;cursor:pointer">Find Matches</button>
+          <button id="signoutBtn" style="padding:8px 12px;border:1px solid #e5e7eb;border-radius:10px;background:#fff;cursor:pointer">Sign out</button>
+        </div>
+      </div>`;
+    const errHtml = (errors && errors.length)
+      ? `<div style="max-width:960px;margin:16px auto;padding:12px;border:1px solid #fecaca;background:#fef2f2;color:#991b1b;border-radius:10px">
+           <strong>Error:</strong> ${errors.map(e=>String(e)).join("<br>")}
+         </div>` : "";
+    const haveMore = state.shown < items.length;
+    const list = items.slice(0, state.shown).map(card).join("") || "<p style='max-width:960px;margin:14px auto;'>No matches yet. Click <em>Find Matches</em> to run.</p>";
+    show(`${bar}${errHtml}<div style="max-width:960px;margin:14px auto;">${list}
+      ${haveMore ? `<div style="text-align:center;margin:12px 0 30px;">
+        <button id="cc-load-more" style="padding:10px 14px;border:1px solid #d1d5db;border-radius:10px;background:#fff;cursor:pointer">Load more</button>
+      </div>` : ""}</div>`);
+
+    // handlers
+    const so = document.getElementById("signoutBtn");
+    if (so) so.onclick = async ()=>{ try{ await firebase.auth().signOut(); location.reload(); }catch(e){ log(e.message||e); } };
+
+    const lm = document.getElementById("cc-load-more");
+    if (lm) lm.onclick = ()=>{ state.shown = Math.min(items.length, state.shown + state.pageSize); render(state.items, []); };
+
+    const run = document.getElementById("runBtn");
+    if (run) run.onclick = runMatching;
+  }
+
+  // Reads the saved results: profiles/{uid}/"Match Results"
+  async function loadSavedMatches(db, uid, runId) {
+    try {
+      const base = db.collection("profiles").doc(uid).collection("Match Results");
+      let q = base;
+      if (runId) q = q.where("runId", "==", runId);
+      q = q.orderBy("score", "desc").limit(500);
+      const snap = await q.get();
+      return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    } catch (e) {
+      log("loadSavedMatches failed: " + (e.message||e));
+      return [];
+    }
+  }
+
+  // Button handler: call callable function; if it returns results we show them; else fetch from subcollection
+  async function runMatching(){
+    const btn = document.getElementById("runBtn");
+    btn.disabled = true; btn.textContent = "Running…";
+    try{
+      const user = firebase.auth().currentUser;
+      if (!user) throw new Error("Please sign in.");
+      const db = firebase.firestore();
+      const functions = firebase.functions(); // region default (us-central1). If you deployed elsewhere: firebase.app().functions("REGION")
+
+      // Call the function
+      let results = [];
+      let runId = null;
+      try {
+        const callable = functions.httpsCallable("matchOpportunities");
+        const resp = await callable({ pageSize: 150 });
+        const data = resp?.data || {};
+        if (Array.isArray(data.results)) results = data.results;
+        runId = data?.meta?.runId || null;
+      } catch (e) {
+        log("callable failed: " + (e.message || e));
+      }
+
+      // If nothing returned (or you prefer the saved copy), read from Firestore
+      if (!results.length) {
+        const saved = await loadSavedMatches(db, user.uid, runId /* may be null */);
+        results = saved;
+      }
+
+      // Normalize minimally for the renderer
+      state.items = (results || []).map(x => ({
+        source: x.source || x.collection || "match",
+        title: x.title || "",
+        agency: x.agency || x.department || "",
+        openDate: x.openDate || x.postedDate || "",
+        closeDate: x.closeDate || x.deadline || "",
+        url: x.url || x.synopsisUrl || x.link || "",
+        city: x.city, state: x.state, place: x.place,
+      }));
+      state.shown = Math.min(state.pageSize, state.items.length);
+      state.lastRunId = runId;
+      render(state.items, []);
+    } catch (e) {
+      render(state.items, ["matchOpportunities failed: " + (e.message||e)]);
+    } finally {
+      btn.disabled = false; btn.textContent = "Find Matches";
+    }
+  }
+
+  // Boot: load compat SDKs (Squarespace-friendly)
+  (async function boot(){
+    status("Booting…");
+    function add(src){ return new Promise((res,rej)=>{ const s=document.createElement("script"); s.src=src; s.onload=res; s.onerror=()=>rej(new Error("Failed to load "+src)); document.head.appendChild(s); }); }
+    try{
+      await add("https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js");
+      await add("https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js");
+      await add("https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js");
+      await add("https://www.gstatic.com/firebasejs/8.10.1/firebase-functions.js");
+      log("Firebase scripts loaded");
+    }catch(e){ return show(`<p style="color:#b91c1c">Script load error: ${e.message}</p>`); }
+
+    const cfg = {
+      apiKey: "AIzaSyDbkrUWV13zBvl4L2lu5Qw5aLYbC9LCjJk",
+      authDomain: "therfpqueen.firebaseapp.com",
+      projectId: "therfpqueen-f11fd"
+    };
+
+    try{
+      firebase.initializeApp(cfg);
+      const auth = firebase.auth();
+      const db   = firebase.firestore();
+
+      status("Checking session…");
+      auth.onAuthStateChanged(async (user)=>{
+        if(!user){
+          // simple inline login
+          show(`
+            <div style="max-width:420px;margin:40px auto;padding:20px;border:1px solid #e5e7eb;border-radius:14px;background:#fff;">
+              <h3 style="margin:0 0 8px;">Sign in</h3>
+              <div id="err" style="display:none;margin-bottom:10px;color:#b91c1c;"></div>
+              <input id="email" type="email" placeholder="Email" autocomplete="email"
+                     style="width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:10px;margin-bottom:8px;">
+              <input id="password" type="password" placeholder="Password" autocomplete="current-password"
+                     style="width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:10px;margin-bottom:12px;">
+              <button id="loginBtn" style="width:100%;padding:12px;border:0;border-radius:12px;background:#685bc6;color:#fff;font-weight:600;cursor:pointer">
+                Log in
+              </button>
+            </div>`);
+          const lb = document.getElementById("loginBtn");
+          lb.onclick = async ()=>{
+            const err = document.getElementById("err");
+            err.style.display="none";
+            try {
+              const email = document.getElementById("email").value.trim();
+              const pw = document.getElementById("password").value;
+              await auth.signInWithEmailAndPassword(email,pw);
+            } catch(e){ err.textContent=(e?.message||"Login failed").replace("Firebase:","").trim(); err.style.display="block"; log(err.textContent); }
+          };
+          return;
+        }
+
+        state.email = user.email || "";
+        // If you want to auto-show last run without calling the function:
+        try {
+          const prof = await db.collection("profiles").doc(user.uid).get();
+          const latest = prof.exists ? (prof.data().latestMatch || null) : null;
+          const runId = latest?.runId || null;
+          const pre = runId ? await loadSavedMatches(db, user.uid, runId) : [];
+          state.items = pre.map(x => ({
+            source: x.source || x.collection || "match",
+            title: x.title || "",
+            agency: x.agency || x.department || "",
+            openDate: x.openDate || x.postedDate || "",
+            closeDate: x.closeDate || x.deadline || "",
+            url: x.url || x.synopsisUrl || x.link || "",
+            city: x.city, state: x.state, place: x.place,
+          }));
+          state.shown = Math.min(state.pageSize, state.items.length);
+          render(state.items, []);
+        } catch (e) {
+          render([], [(e.message || e)]);
+        }
+      });
+    }catch(e){
+      show(`<p style="color:#b91c1c">Firebase init error: ${e.message||e}</p>`);
+    }
+  })();
+
+  window.addEventListener("error", (e)=>{ log("[window.error] "+(e.message||e)); });
+  window.addEventListener("unhandledrejection", (e)=>{ log("[unhandled] "+(e.reason?.message||e.reason||e)); });
+
+})();
+</script>

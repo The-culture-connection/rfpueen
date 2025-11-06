@@ -1,0 +1,156 @@
+<div id="cc-signup"
+     style="max-width:520px;margin:40px auto;padding:24px;border:1px solid #e5e7eb;border-radius:14px;font-family:Inter,system-ui,Arial,sans-serif">
+
+  <h2 style="margin:0 0 12px;">Create your account</h2>
+  <p style="margin:0 0 16px;color:#6b7280">Sign up with email or Google.</p>
+
+  <label style="display:block;margin:12px 0 6px;">Email</label>
+  <input id="cc-email" type="email" placeholder="you@example.com"
+         style="width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:10px">
+
+  <label style="display:block;margin:12px 0 6px;">Password</label>
+  <div style="display:flex;gap:8px;align-items:center">
+    <input id="cc-pass" type="password" placeholder="Minimum 8 characters"
+           style="flex:1;padding:12px;border:1px solid #cbd5e1;border-radius:10px">
+    <button id="cc-toggle-pass" aria-label="Show/Hide password"
+            style="padding:10px 12px;border:1px solid #cbd5e1;border-radius:10px;background:#fff;cursor:pointer">Show</button>
+  </div>
+  <small style="display:block;margin-top:6px;color:#6b7280">Use at least 8 characters, with a number.</small>
+
+  <label style="display:block;margin:12px 0 6px;">Confirm password</label>
+  <input id="cc-pass2" type="password" placeholder="Re-enter password"
+         style="width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:10px">
+
+  <label style="display:flex;gap:10px;align-items:flex-start;margin-top:12px">
+    <input id="cc-tos" type="checkbox">
+    <span>I agree to the <a href="/terms" target="_blank">Terms</a> and <a href="/privacy" target="_blank">Privacy Policy</a>.</span>
+  </label>
+
+  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:16px">
+    <button id="cc-create"
+            style="padding:12px 16px;border:0;border-radius:10px;background:#111827;color:#fff;cursor:pointer">
+      Create account
+    </button>
+    <button id="cc-google"
+            style="padding:12px 16px;border:1px solid #cbd5e1;border-radius:10px;background:#fff;cursor:pointer">
+      Continue with Google
+    </button>
+  </div>
+
+  <div style="margin-top:14px">
+    <small id="cc-status" style="color:#6b7280">Fill the form to get started.</small>
+  </div>
+
+  <div style="margin-top:18px;color:#6b7280">
+    Already have an account? <a href="/signin">Sign in</a>
+  </div>
+</div>
+
+<!-- Firebase Web SDK (modular) via CDN -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import {
+    getAuth,
+    onAuthStateChanged,
+    setPersistence,
+    browserLocalPersistence,
+    createUserWithEmailAndPassword,
+    GoogleAuthProvider,
+    signInWithRedirect,
+    getRedirectResult
+  } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+
+  // --- Your real Firebase config ---
+  const firebaseConfig = {
+    apiKey: "AIzaSyDbkrUWV13zBvl4L2lu5Qw5aLYbC9LCjJk",
+    authDomain: "therfpqueen-f11fd.firebaseapp.com",
+    projectId: "therfpqueen-f11fd",
+    storageBucket: "therfpqueen-f11fd.firebasestorage.app",
+    messagingSenderId: "173138212955",
+    appId: "1:173138212955:web:2753c72dc7be65cf14677e",
+    measurementId: "G-83PDWFH42F"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  await setPersistence(auth, browserLocalPersistence);
+
+  const $ = (id) => document.getElementById(id);
+  const emailEl = $("cc-email");
+  const passEl = $("cc-pass");
+  const pass2El = $("cc-pass2");
+  const tosEl = $("cc-tos");
+  const createBtn = $("cc-create");
+  const googleBtn = $("cc-google");
+  const statusEl = $("cc-status");
+  const togglePassBtn = $("cc-toggle-pass");
+
+  const redirectAfter = "/registration1"; // 👈 redirect here after signup
+
+  const setStatus = (msg, isError=false) => {
+    statusEl.textContent = msg;
+    statusEl.style.color = isError ? "#b91c1c" : "#6b7280";
+  };
+
+  function validateFields() {
+    const email = (emailEl.value || "").trim();
+    const pwd   = passEl.value || "";
+    const pwd2  = pass2El.value || "";
+    if (!email)          return "Please enter an email.";
+    if (!pwd || pwd.length < 8) return "Password must be at least 8 characters.";
+    if (!/\d/.test(pwd)) return "Password should include at least one number.";
+    if (pwd !== pwd2)    return "Passwords do not match.";
+    if (!tosEl.checked)  return "You must accept the Terms and Privacy Policy.";
+    return null;
+  }
+
+  createBtn.addEventListener("click", async () => {
+    try {
+      setStatus("Creating your account…");
+      const err = validateFields();
+      if (err) return setStatus(err, true);
+
+      const email = (emailEl.value || "").trim();
+      const pwd   = passEl.value || "";
+
+      await createUserWithEmailAndPassword(auth, email, pwd);
+
+      setStatus("Account created. Redirecting…");
+      if (redirectAfter) window.location.assign(redirectAfter);
+    } catch (e) {
+      setStatus(e.message ?? "Sign-up failed.", true);
+    }
+  });
+
+  const provider = new GoogleAuthProvider();
+  googleBtn.addEventListener("click", async () => {
+    try {
+      setStatus("Redirecting to Google…");
+      await signInWithRedirect(auth, provider);
+    } catch (e) {
+      setStatus(e.message ?? "Google sign-in failed.", true);
+    }
+  });
+
+  try {
+    const result = await getRedirectResult(auth);
+    if (result && result.user) {
+      setStatus("Signed in with Google. Redirecting…");
+      if (redirectAfter) window.location.assign(redirectAfter);
+    }
+  } catch (e) {}
+
+  togglePassBtn.addEventListener("click", () => {
+    const t = passEl.type === "password" ? "text" : "password";
+    passEl.type = t;
+    pass2El.type = t;
+    togglePassBtn.textContent = (t === "password") ? "Show" : "Hide";
+  });
+
+  onAuthStateChanged(auth, (user) => {
+    if (user) {
+      // Optionally auto-redirect if user refreshes while signed in:
+      // window.location.assign(redirectAfter);
+    }
+  });
+</script>

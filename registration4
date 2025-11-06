@@ -1,0 +1,141 @@
+<!-- ===== REGISTRATION 4 ===== -->
+<div id="reg4"
+     style="max-width:720px;margin:40px auto;padding:24px;border:1px solid #e5e7eb;border-radius:14px;font-family:Inter,system-ui,Arial,sans-serif;display:none">
+  <h2 style="margin:0 0 12px;">Entity Details</h2>
+  <p style="margin:0 0 18px;color:#6b7280">Please provide your official details.</p>
+
+  <!-- EIN -->
+  <label style="display:block;margin:12px 0 6px;">Employer Identification Number (EIN)</label>
+  <input id="cc-ein" placeholder="e.g., 12-3456789"
+         style="width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:10px">
+
+  <!-- Website -->
+  <label style="display:block;margin:16px 0 6px;">Website</label>
+  <input id="cc-website" type="url" placeholder="https://yourdomain.com"
+         style="width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:10px">
+
+  <!-- Salutation -->
+  <label style="display:block;margin:16px 0 6px;">Salutation</label>
+  <select id="cc-salutation"
+          style="width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:10px">
+    <option value="">Select one…</option>
+    <option>Mr.</option>
+    <option>Mrs.</option>
+    <option>Ms.</option>
+    <option>Dr.</option>
+    <option>Prof.</option>
+    <option>Other</option>
+  </select>
+
+  <!-- Actions -->
+  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:22px">
+    <button id="cc-continue"
+            style="padding:12px 16px;border:0;border-radius:10px;background:#111827;color:#fff;cursor:pointer">
+      Continue
+    </button>
+    <small id="cc-status" style="align-self:center;color:#6b7280">Enter all fields to continue.</small>
+  </div>
+</div>
+
+<!-- Signed-out guard -->
+<div id="reg4-guard" style="max-width:720px;margin:40px auto;padding:16px;color:#6b7280;display:none">
+  You need to sign in first. <a href="/signin">Go to sign in</a>
+</div>
+
+<!-- Firebase SDKs -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import {
+    getAuth, onAuthStateChanged, setPersistence, browserLocalPersistence
+  } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+  import {
+    getFirestore, doc, setDoc, getDoc, updateDoc, serverTimestamp
+  } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+  // --- Config ---
+  const firebaseConfig = {
+    apiKey: "AIzaSyDbkrUWV13zBvl4L2lu5Qw5aLYbC9LCjJk",
+    authDomain: "therfpqueen-f11fd.firebaseapp.com",
+    projectId: "therfpqueen-f11fd",
+    storageBucket: "therfpqueen-f11fd.firebasestorage.app",
+    messagingSenderId: "173138212955",
+    appId: "1:173138212955:web:2753c72dc7be65cf14677e",
+    measurementId: "G-83PDWFH42F"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+  await setPersistence(auth, browserLocalPersistence);
+
+  // DOM
+  const $ = (id) => document.getElementById(id);
+  const wrap = $("reg4");
+  const guard = $("reg4-guard");
+  const statusEl = $("cc-status");
+
+  const einEl = $("cc-ein");
+  const websiteEl = $("cc-website");
+  const salutationEl = $("cc-salutation");
+  const continueBtn = $("cc-continue");
+
+  const setStatus = (msg, isError=false) => {
+    statusEl.textContent = msg;
+    statusEl.style.color = isError ? "#b91c1c" : "#6b7280";
+  };
+
+  let currentUser = null;
+  onAuthStateChanged(auth, async (user) => {
+    if (!user) {
+      guard.style.display = "block";
+      wrap.style.display = "none";
+      return;
+    }
+    currentUser = user;
+    guard.style.display = "none";
+    wrap.style.display = "block";
+
+    // Prefill if available
+    try {
+      const ref = doc(db, "profiles", user.uid);
+      const snap = await getDoc(ref);
+      if (snap.exists()) {
+        const d = snap.data() || {};
+        if (d.ein) einEl.value = d.ein;
+        if (d.website) websiteEl.value = d.website;
+        if (d.salutation) salutationEl.value = d.salutation;
+      }
+    } catch(e) {}
+  });
+
+  continueBtn.addEventListener("click", async () => {
+    try {
+      if (!currentUser) return (window.location.href = "/signin");
+
+      const ein = einEl.value.trim();
+      const website = websiteEl.value.trim();
+      const salutation = salutationEl.value;
+
+      if (!ein) return setStatus("Please enter your EIN.", true);
+      if (!website) return setStatus("Please enter your website.", true);
+      if (!salutation) return setStatus("Please select a salutation.", true);
+
+      setStatus("Saving…");
+
+      const ref = doc(db, "profiles", currentUser.uid);
+      await setDoc(ref, {
+        ein,
+        website,
+        salutation,
+        onboardingStep: 4,
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+
+      await updateDoc(ref, { onboardingStep: 5, updatedAt: serverTimestamp() });
+
+      window.location.assign("/registration5");
+    } catch (e) {
+      setStatus(e?.message || "Could not save. Please try again.", true);
+    }
+  });
+</script>

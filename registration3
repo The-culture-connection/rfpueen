@@ -1,0 +1,307 @@
+<!-- ===== REGISTRATION 3 (Interests + Funding Types) ===== -->
+<div id="reg3"
+     style="max-width:900px;margin:40px auto;padding:24px;border:1px solid #e5e7eb;border-radius:14px;font-family:Inter,system-ui,Arial,sans-serif;display:none">
+  <h2 style="margin:0 0 12px;">Interests, Funding Types & Goals</h2>
+  <p style="margin:0 0 18px;color:#6b7280">Choose all that apply. We’ll use these to match opportunities and prefill forms.</p>
+
+  <!-- Main Categories -->
+  <h3 style="margin:16px 0 8px;">Main Interest Categories</h3>
+  <div id="cc-main" style="columns:2;gap:24px;line-height:1.9"></div>
+
+  <!-- Sub-categories (in a dropdown) -->
+  <div style="margin-top:16px;">
+    <details id="cc-sub-wrap" style="border:1px solid #e5e7eb;border-radius:10px;background:#fafafa">
+      <summary style="cursor:pointer;padding:10px 12px;list-style:none;outline:none">
+        <strong>Sub-categories</strong> <span style="color:#6b7280">(optional)</span>
+        <span id="cc-sub-count" style="float:right;color:#6b7280">0 selected</span>
+      </summary>
+      <div id="cc-sub" style="columns:3;gap:24px;line-height:1.9;padding:10px 12px 14px;"></div>
+    </details>
+    <small style="display:block;margin-top:6px;color:#6b7280">Tip: expand to fine-tune with sub-topics (keywords).</small>
+  </div>
+
+  <!-- Raise amount -->
+  <h3 style="margin:20px 0 8px;">How much money are you raising?</h3>
+  <input id="cc-raise" type="number" placeholder="e.g., 50000"
+         style="width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:10px">
+
+  <!-- Funding Types -->
+  <h3 style="margin:20px 0 8px;">Types of funding you’re seeking</h3>
+  <div id="cc-funding" style="columns:2;gap:24px;line-height:1.9">
+    <label><input type="checkbox" value="Bids"> Bids</label><br>
+    <label><input type="checkbox" value="RFPs"> RFPs</label><br>
+    <label><input type="checkbox" value="Contracts"> Contracts</label><br>
+    <label><input type="checkbox" value="Grants"> Grants</label>
+  </div>
+
+  <!-- Actions -->
+  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:22px">
+    <button id="cc-continue"
+            style="padding:12px 16px;border:0;border-radius:10px;background:#111827;color:#fff;cursor:pointer">
+      Continue
+    </button>
+    <small id="cc-status" style="align-self:center;color:#6b7280">Select your options and continue.</small>
+  </div>
+</div>
+
+<!-- Signed-out guard -->
+<div id="reg3-guard" style="max-width:900px;margin:40px auto;padding:16px;color:#6b7280;display:none">
+  You need to sign in first. <a href="/signin">Go to sign in</a>
+</div>
+
+<!-- Firebase SDKs -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import {
+    getAuth, onAuthStateChanged, setPersistence, browserLocalPersistence
+  } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+  import {
+    getFirestore, doc, setDoc, getDoc, updateDoc, serverTimestamp
+  } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+  // --- Config ---
+  const firebaseConfig = {
+    apiKey: "AIzaSyDbkrUWV13zBvl4L2lu5Qw5aLYbC9LCjJk",
+    authDomain: "therfpqueen-f11fd.firebaseapp.com",
+    projectId: "therfpqueen-f11fd",
+    storageBucket: "therfpqueen-f11fd.firebasestorage.app",
+    messagingSenderId: "173138212955",
+    appId: "1:173138212955:web:2753c72dc7be65cf14677e",
+    measurementId: "G-83PDWFH42F"
+  };
+
+  // ===== Category definitions =====
+  // Main categories (from your “Recommended User Interest Categories” list)
+  const MAIN_CATEGORIES = [
+    // Primary (high frequency)
+    "Healthcare & Medical Research",
+    "Education & Training Programs",
+    "Community Development & Social Services",
+    "Technology & Innovation",
+    "Environmental & Sustainability",
+    // Secondary (medium)
+    "Arts & Culture",
+    "Business & Economic Development",
+    "Scientific Research",
+    "Infrastructure & Transportation",
+    "Agriculture & Food Systems",
+    // Specialized (niche but important)
+    "Mental Health & Wellness",
+    "Youth & Children's Programs",
+    "Women's Issues & Gender Equity",
+    "Disability Services & Accessibility",
+    "Rural Development",
+    "International Development",
+    "Public Safety & Security",
+    "Digital Inclusion & Technology Access",
+    "Climate Action & Environmental Justice",
+    "Entrepreneurship & Small Business"
+  ];
+
+  // Sub-category keywords grouped by main category (curated from your doc sections)
+  const SUBCATS_BY_MAIN = {
+    "Healthcare & Medical Research": [
+      "health", "healthcare", "medical", "clinical", "patient", "treatment", "therapy",
+      "hospital", "nursing", "biomedical", "clinical research", "clinical trials",
+      "public health", "epidemiology", "prevention", "diagnosis", "rehabilitation"
+    ],
+    "Education & Training Programs": [
+      "education", "training", "learning", "teaching", "school", "university", "college",
+      "curriculum", "instruction", "workshop", "seminar", "STEM", "scholarship", "fellowship",
+      "professional development", "literacy", "numeracy", "vocational training"
+    ],
+    "Community Development & Social Services": [
+      "community", "social services", "support", "assistance", "outreach", "engagement",
+      "nonprofit", "philanthropy", "equity", "diversity", "inclusion", "accessibility",
+      "housing", "homelessness", "food security", "quality of life"
+    ],
+    "Technology & Innovation": [
+      "technology", "innovation", "software", "hardware", "AI", "machine learning",
+      "automation", "robotics", "cybersecurity", "cloud", "data", "analytics", "startup",
+      "platform", "application"
+    ],
+    "Environmental & Sustainability": [
+      "environment", "sustainability", "climate", "renewable energy", "solar", "wind",
+      "emissions", "conservation", "biodiversity", "ecosystem", "water", "air quality",
+      "recycling", "restoration", "resilience", "environmental justice"
+    ],
+    "Arts & Culture": [
+      "arts", "culture", "creative", "music", "dance", "theater", "film", "media",
+      "museum", "heritage", "history", "exhibition", "festival"
+    ],
+    "Business & Economic Development": [
+      "business", "economic development", "entrepreneurship", "small business",
+      "manufacturing", "commerce", "trade", "workforce", "job training", "finance", "investment"
+    ],
+    "Scientific Research": [
+      "research", "science", "laboratory", "experiment", "data", "statistics",
+      "methodology", "publication", "conference"
+    ],
+    "Infrastructure & Transportation": [
+      "infrastructure", "transportation", "public works", "roads", "bridges", "rail",
+      "airport", "construction", "utilities", "broadband"
+    ],
+    "Agriculture & Food Systems": [
+      "agriculture", "farming", "rural development", "crop", "livestock", "food systems",
+      "nutrition", "food safety", "distribution", "supply chain"
+    ],
+    "Mental Health & Wellness": [
+      "mental health", "behavioral health", "wellness", "psychology", "psychiatry", "addiction"
+    ],
+    "Youth & Children's Programs": [
+      "youth", "children", "after-school", "early childhood", "preschool", "K-12"
+    ],
+    "Women's Issues & Gender Equity": [
+      "women", "gender equity", "WOSB", "maternal health"
+    ],
+    "Disability Services & Accessibility": [
+      "disability", "accessibility", "ADA", "special education"
+    ],
+    "Rural Development": [
+      "rural", "rural development", "rural infrastructure", "USDA"
+    ],
+    "International Development": [
+      "international", "global health", "foreign aid", "refugee", "immigrant"
+    ],
+    "Public Safety & Security": [
+      "public safety", "security", "violence prevention", "justice", "legal services"
+    ],
+    "Digital Inclusion & Technology Access": [
+      "digital inclusion", "technology access", "broadband", "connectivity"
+    ],
+    "Climate Action & Environmental Justice": [
+      "climate action", "mitigation", "adaptation", "environmental justice"
+    ],
+    "Entrepreneurship & Small Business": [
+      "entrepreneurship", "small business", "startup", "SBIR", "STTR"
+    ]
+  };
+
+  // ===== DOM =====
+  const $ = (id) => document.getElementById(id);
+  const wrap = $("reg3");
+  const guard = $("reg3-guard");
+  const statusEl = $("cc-status");
+  const mainContainer = $("cc-main");
+  const subContainer = $("cc-sub");
+  const subWrap = $("cc-sub-wrap");
+  const subCount = $("cc-sub-count");
+  const continueBtn = $("cc-continue");
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+  await setPersistence(auth, browserLocalPersistence).catch(()=>{});
+
+  // ===== UI builders =====
+  function checkboxList(container, values, selectedSet) {
+    container.innerHTML = values.map(v =>
+      `<label><input type="checkbox" value="${v.replace(/"/g,'&quot;')}" ${selectedSet?.has(v) ? "checked" : ""}> ${v}</label>`
+    ).join("<br>");
+  }
+
+  function updateSubcount() {
+    const n = [...subContainer.querySelectorAll("input:checked")].length;
+    subCount.textContent = `${n} selected`;
+  }
+
+  function currentSelections(container) {
+    return [...container.querySelectorAll("input:checked")].map(el => el.value);
+  }
+
+  function setStatus(msg, isError=false) {
+    statusEl.textContent = msg;
+    statusEl.style.color = isError ? "#b91c1c" : "#6b7280";
+  }
+
+  // initial render (empty; we’ll prefill below)
+  checkboxList(mainContainer, MAIN_CATEGORIES, new Set());
+  // subcats = union of all sub lists so users can multi-select across mains
+  const ALL_SUBS = Array.from(
+    new Set(Object.values(SUBCATS_BY_MAIN).flat())
+  ).sort((a,b)=>a.localeCompare(b));
+  checkboxList(subContainer, ALL_SUBS, new Set());
+  updateSubcount();
+
+  // Watch sub selection
+  subContainer.addEventListener("change", updateSubcount);
+
+  // ===== Prefill if profile exists =====
+  let currentUser = null;
+  onAuthStateChanged(auth, async (user) => {
+    if (!user) {
+      guard.style.display = "block";
+      wrap.style.display = "none";
+      return;
+    }
+    currentUser = user;
+    guard.style.display = "none";
+    wrap.style.display = "block";
+
+    try {
+      const ref = doc(db, "profiles", user.uid);
+      const snap = await getDoc(ref);
+      if (!snap.exists()) return;
+
+      const d = snap.data() || {};
+      const selectedMain = new Set(d.interestsMain || []);
+      const selectedSub  = new Set(d.interestsSub || d.grantsByInterest || []); // back-compat
+
+      // Re-render with selections
+      checkboxList(mainContainer, MAIN_CATEGORIES, selectedMain);
+      checkboxList(subContainer, ALL_SUBS, selectedSub);
+      updateSubcount();
+
+      if (d.raiseAmount) $("cc-raise").value = d.raiseAmount;
+
+      // funding types
+      if (Array.isArray(d.fundingTypes)) {
+        [...document.querySelectorAll("#cc-funding input")].forEach(el => {
+          if (d.fundingTypes.includes(el.value)) el.checked = true;
+        });
+      }
+    } catch (e) {
+      console.warn("prefill error", e);
+    }
+  });
+
+  // ===== Save =====
+  continueBtn.addEventListener("click", async () => {
+    try {
+      if (!currentUser) return (window.location.href = "/signin");
+
+      const interestsMain = currentSelections(mainContainer);
+      const interestsSub  = currentSelections(subContainer);
+      const fundingTypes  = currentSelections($("cc-funding"));
+      const raiseAmountRaw = $("cc-raise").value;
+      const raiseAmount = raiseAmountRaw ? Number(raiseAmountRaw) : null;
+
+      if (!interestsMain.length && !interestsSub.length) {
+        return setStatus("Please pick at least one main category or sub-category.", true);
+      }
+      if (!fundingTypes.length) {
+        return setStatus("Please choose at least one funding type (Bids, RFPs, Contracts, Grants).", true);
+      }
+
+      setStatus("Saving…");
+
+      const ref = doc(db, "profiles", currentUser.uid);
+      await setDoc(ref, {
+        interestsMain,
+        interestsSub,
+        // back-compat so older parts of the app still work:
+        grantsByInterest: Array.from(new Set([...interestsMain, ...interestsSub])),
+        fundingTypes,
+        raiseAmount,
+        onboardingStep: 3,
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+
+      await updateDoc(ref, { onboardingStep: 4, updatedAt: serverTimestamp() });
+
+      window.location.assign("/registration4");
+    } catch (e) {
+      setStatus(e?.message || "Couldn’t save. Please try again.", true);
+    }
+  });
+</script>

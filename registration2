@@ -1,0 +1,233 @@
+<!-- ===== REGISTRATION 2 (Squarespace + Firebase Auth + Firestore) ===== -->
+<div id="reg2"
+     style="max-width:720px;margin:40px auto;padding:24px;border:1px solid #e5e7eb;border-radius:14px;font-family:Inter,system-ui,Arial,sans-serif;display:none">
+  <h2 style="margin:0 0 12px;">Tell us about you and your entity</h2>
+  <p style="margin:0 0 18px;color:#6b7280">This helps us match you to opportunities and prefill applications.</p>
+
+  <!-- Entity Legal Name -->
+  <label style="display:block;margin:12px 0 6px;">Entity legal name</label>
+  <input id="cc-entity-legal" placeholder="Exact legal name (e.g., Culture Connection LLC)"
+         style="width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:10px">
+
+  <!-- Your full name + role -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px">
+    <div>
+      <label style="display:block;margin:12px 0 6px;">Your full name</label>
+      <input id="cc-full-name" placeholder="First Last"
+             style="width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:10px">
+    </div>
+    <div>
+      <label style="display:block;margin:12px 0 6px;">Your role</label>
+      <input id="cc-role" placeholder="Founder, Executive Director, Student PI, etc."
+             style="width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:10px">
+    </div>
+  </div>
+
+  <!-- Phone -->
+  <label style="display:block;margin:12px 0 6px;">Phone number</label>
+  <input id="cc-phone" type="tel" inputmode="tel" placeholder="e.g., (555) 555-5555"
+         style="width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:10px">
+
+  <!-- Entity Address -->
+  <h3 style="margin:18px 0 8px;">Entity address</h3>
+  <div>
+    <label style="display:block;margin:8px 0 6px;">Street address</label>
+    <input id="cc-addr1" placeholder="Street address"
+           style="width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:10px">
+  </div>
+  <div>
+    <label style="display:block;margin:8px 0 6px;">Address line 2 (optional)</label>
+    <input id="cc-addr2" placeholder="Suite, Unit, etc."
+           style="width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:10px">
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px">
+    <div>
+      <label style="display:block;margin:8px 0 6px;">City</label>
+      <input id="cc-city" placeholder="e.g., Cincinnati"
+             style="width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:10px">
+    </div>
+    <div>
+      <label style="display:block;margin:8px 0 6px;">State/Province</label>
+      <input id="cc-region" placeholder="e.g., OH / Ontario"
+             style="width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:10px">
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px">
+    <div>
+      <label style="display:block;margin:8px 0 6px;">Postal/ZIP</label>
+      <input id="cc-postal" placeholder="e.g., 45220 / M5V 2T6"
+             style="width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:10px">
+    </div>
+    <div>
+      <label style="display:block;margin:8px 0 6px;">Country</label>
+      <input id="cc-country" placeholder="United States / Canada"
+             style="width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:10px">
+    </div>
+  </div>
+
+  <!-- Actions -->
+  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:18px">
+    <button id="cc-continue"
+            style="padding:12px 16px;border:0;border-radius:10px;background:#111827;color:#fff;cursor:pointer">
+      Continue
+    </button>
+    <small id="cc-status" style="align-self:center;color:#6b7280">Complete all required fields.</small>
+  </div>
+</div>
+
+<!-- Signed-out guard -->
+<div id="reg2-guard" style="max-width:720px;margin:40px auto;padding:16px;color:#6b7280;display:none">
+  You need to sign in first. <a href="/signin">Go to sign in</a>
+</div>
+
+<!-- Firebase SDKs (modular) -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import {
+    getAuth,
+    onAuthStateChanged,
+    setPersistence,
+    browserLocalPersistence
+  } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+  import {
+    getFirestore,
+    doc,
+    getDoc,
+    setDoc,
+    serverTimestamp,
+    updateDoc
+  } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+  // --- Your Firebase config (same as earlier pages) ---
+  const firebaseConfig = {
+    apiKey: "AIzaSyDbkrUWV13zBvl4L2lu5Qw5aLYbC9LCjJk",
+    authDomain: "therfpqueen-f11fd.firebaseapp.com",
+    projectId: "therfpqueen-f11fd",
+    storageBucket: "therfpqueen-f11fd.firebasestorage.app",
+    messagingSenderId: "173138212955",
+    appId: "1:173138212955:web:2753c72dc7be65cf14677e",
+    measurementId: "G-83PDWFH42F"
+  };
+
+  // --- Init ---
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+  await setPersistence(auth, browserLocalPersistence);
+
+  // --- DOM ---
+  const $ = (id) => document.getElementById(id);
+  const wrap = $("reg2");
+  const guard = $("reg2-guard");
+  const statusEl = $("cc-status");
+
+  const entityLegalEl = $("cc-entity-legal");
+  const fullNameEl    = $("cc-full-name");
+  const roleEl        = $("cc-role");
+  const phoneEl       = $("cc-phone");
+
+  const addr1El  = $("cc-addr1");
+  const addr2El  = $("cc-addr2");
+  const cityEl   = $("cc-city");
+  const regionEl = $("cc-region");
+  const postalEl = $("cc-postal");
+  const countryEl= $("cc-country");
+
+  const continueBtn = $("cc-continue");
+
+  const setStatus = (msg, isError=false) => {
+    statusEl.textContent = msg;
+    statusEl.style.color = isError ? "#b91c1c" : "#6b7280";
+  };
+
+  // Prefill if doc exists
+  let currentUser = null;
+  onAuthStateChanged(auth, async (user) => {
+    if (!user) {
+      guard.style.display = "block";
+      wrap.style.display = "none";
+      return;
+    }
+    currentUser = user;
+    guard.style.display = "none";
+    wrap.style.display = "block";
+
+    try {
+      const ref = doc(db, "profiles", user.uid);
+      const snap = await getDoc(ref);
+      if (snap.exists()) {
+        const d = snap.data() || {};
+        if (d.entityLegalName) entityLegalEl.value = d.entityLegalName;
+        if (d.contactFullName) fullNameEl.value    = d.contactFullName;
+        if (d.contactRole)     roleEl.value        = d.contactRole;
+        if (d.contactPhone)    phoneEl.value       = d.contactPhone;
+
+        if (d.entityAddress?.line1)   addr1El.value = d.entityAddress.line1;
+        if (d.entityAddress?.line2)   addr2El.value = d.entityAddress.line2 || "";
+        if (d.entityAddress?.city)    cityEl.value  = d.entityAddress.city;
+        if (d.entityAddress?.region)  regionEl.value= d.entityAddress.region;
+        if (d.entityAddress?.postal)  postalEl.value= d.entityAddress.postal;
+        if (d.entityAddress?.country) countryEl.value = d.entityAddress.country;
+      }
+    } catch(e) {
+      // ignore prefill errors silently
+    }
+  });
+
+  function validate() {
+    if (!entityLegalEl.value.trim()) return "Please enter your entity’s legal name.";
+    if (!fullNameEl.value.trim())    return "Please enter your full name.";
+    if (!roleEl.value.trim())        return "Please enter your role.";
+    const ph = phoneEl.value.replace(/[^\d+]/g, "");
+    if (ph.length < 7)               return "Please enter a valid phone number.";
+    if (!addr1El.value.trim())       return "Please enter a street address.";
+    if (!cityEl.value.trim())        return "Please enter a city.";
+    if (!regionEl.value.trim())      return "Please enter a state/province.";
+    if (!postalEl.value.trim())      return "Please enter a postal/ZIP code.";
+    if (!countryEl.value.trim())     return "Please enter a country.";
+    return null;
+  }
+
+  continueBtn.addEventListener("click", async () => {
+    try {
+      if (!currentUser) return (window.location.href = "/signin");
+      const err = validate();
+      if (err) return setStatus(err, true);
+
+      setStatus("Saving…");
+
+      const ref = doc(db, "profiles", currentUser.uid);
+      await setDoc(ref, {
+        uid: currentUser.uid,
+        email: currentUser.email || null,
+
+        entityLegalName: entityLegalEl.value.trim(),
+        contactFullName: fullNameEl.value.trim(),
+        contactRole:     roleEl.value.trim(),
+        contactPhone:    phoneEl.value.trim(),
+
+        entityAddress: {
+          line1:   addr1El.value.trim(),
+          line2:   addr2El.value.trim() || null,
+          city:    cityEl.value.trim(),
+          region:  regionEl.value.trim(),
+          postal:  postalEl.value.trim(),
+          country: countryEl.value.trim()
+        },
+
+        onboardingStep: 2,
+        updatedAt: serverTimestamp(),
+        createdAt: serverTimestamp()
+      }, { merge: true });
+
+      // mark step advanced
+      await updateDoc(ref, { onboardingStep: 3, updatedAt: serverTimestamp() });
+
+      window.location.assign("/registration3");
+    } catch (e) {
+      setStatus(e?.message || "Couldn’t save. Please try again.", true);
+    }
+  });
+</script>
