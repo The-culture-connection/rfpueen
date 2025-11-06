@@ -131,7 +131,7 @@
             <div style="display: flex; gap: 8px;">
                 <a href="{% url 'opportunities:explore' %}" class="btn">Explore</a>
                 <a href="{% url 'opportunities:dashboard_saved' %}" class="btn">Saved</a>
-                <a href="{% url 'admin:logout' %}" class="btn">Sign out</a>
+                <a href="{% url 'logout' %}" class="btn">Sign out</a>
             </div>
         </div>
         
@@ -151,7 +151,7 @@
                             </span>
                         {% endif %}
                     </div>
-                    <div class="card-title">{{ applied.opportunity.title|default:"Untitled Opportunity" }}</div>
+                    <div class="card-title">{{ applied.opportunity.title|default:applied.firebase_opportunity_id|default:"Untitled Opportunity" }}</div>
                     <div style="color: #6b7280; margin-bottom: 8px; font-weight: 500">
                         {{ applied.opportunity.agency|default:"Unknown Agency" }}
                     </div>
@@ -162,7 +162,7 @@
                     {% endif %}
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin-bottom: 12px; font-size: 0.85rem; color: #6b7280">
                         <div><strong>Applied:</strong> {{ applied.applied_at|date:"M d, Y" }}</div>
-                        <div><strong>Deadline:</strong> {{ applied.opportunity.close_date|date:"M d, Y"|default:"—" }}</div>
+                        <div><strong>Deadline:</strong> {% if applied.opportunity.close_date %}{{ applied.opportunity.close_date|date:"M d, Y" }}{% else %}—{% endif %}</div>
                     </div>
                     <div class="card-actions">
                         {% if applied.application_url %}
@@ -174,7 +174,7 @@
                                 View Instructions
                             </button>
                         {% endif %}
-                        {% if applied.opportunity.url %}
+                        {% if applied.opportunity and applied.opportunity.url %}
                             <a href="{{ applied.opportunity.url }}" target="_blank" class="action-btn btn-secondary">
                                 View Details
                             </a>
@@ -237,7 +237,7 @@
             if (!confirm('Remove this opportunity from your applied list?')) return;
             
             try {
-                const response = await fetch(`/api/remove-applied/${oppId}/`, {
+                const response = await fetch(`{% url "opportunities:api_remove_applied" "OPP_ID" %}`.replace('OPP_ID', oppId), {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',

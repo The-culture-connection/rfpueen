@@ -181,7 +181,7 @@
             <div style="display: flex; gap: 8px;">
                 <button id="findMatchesBtn" class="btn btn-primary">Find Matches</button>
                 <a href="{% url 'opportunities:dashboard' %}" class="btn">Dashboard</a>
-                <a href="{% url 'admin:logout' %}" class="btn">Sign out</a>
+                <a href="{% url 'logout' %}" class="btn">Sign out</a>
             </div>
         </div>
         
@@ -206,7 +206,7 @@
             container.innerHTML = '<div class="loading">Searching for opportunities...</div>';
             
             try {
-                const response = await fetch('/api/match/', {
+                const response = await fetch('{% url "opportunities:api_match" %}', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -284,7 +284,7 @@
             if (!opp) return;
             
             try {
-                const response = await fetch(`/api/apply/${opp.id}/`, {
+                const response = await fetch(`{% url "opportunities:api_apply" "OPP_ID" %}`.replace('OPP_ID', opp.id), {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -324,7 +324,7 @@
             if (!opp) return;
             
             try {
-                const response = await fetch(`/api/save/${opp.id}/`, {
+                const response = await fetch(`{% url "opportunities:api_save" "OPP_ID" %}`.replace('OPP_ID', opp.id), {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',

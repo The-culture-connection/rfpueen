@@ -127,6 +127,16 @@ FIREBASE_CONFIG = {
     'projectId': 'therfpqueen-f11fd',
 }
 
+# Firebase Functions URLs (update after deployment)
+FIREBASE_FUNCTIONS_BASE_URL = 'https://us-central1-therfpqueen-f11fd.cloudfunctions.net'
+FIREBASE_FUNCTIONS = {
+    'match_opportunities': f'{FIREBASE_FUNCTIONS_BASE_URL}/matchOpportunities',
+    'calculate_win_rate': f'{FIREBASE_FUNCTIONS_BASE_URL}/calculateWinRate',
+}
+
+# Use Firebase Functions for computation (set to False to use local computation)
+USE_FIREBASE_FUNCTIONS = True
+
 # Collection mapping based on funding types
 COLLECTION_MAP = {
     "Contracts": ["SAM"],

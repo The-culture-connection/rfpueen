@@ -105,8 +105,27 @@ def dashboard_applied(request):
     """Applied opportunities view"""
     applied = AppliedOpportunity.objects.filter(user=request.user).select_related('opportunity')
     
+    # Handle cases where opportunity might not exist
+    applied_list = []
+    for app in applied:
+        if not app.opportunity:
+            # Try to get from raw_data or create a minimal opportunity
+            try:
+                opp = Opportunity.objects.get(firebase_id=app.firebase_opportunity_id)
+                app.opportunity = opp
+            except Opportunity.DoesNotExist:
+                # Create a minimal opportunity object for display
+                from django.db import models
+                class MinimalOpportunity:
+                    title = app.firebase_opportunity_id
+                    agency = "Unknown"
+                    url = ""
+                    close_date = None
+                app.opportunity = MinimalOpportunity()
+        applied_list.append(app)
+    
     context = {
-        'applied_opportunities': applied,
+        'applied_opportunities': applied_list,
     }
     return render(request, 'opportunities/dashboard_applied.html', context)
 
@@ -142,7 +161,33 @@ def api_match_opportunities(request):
                 'error': 'No funding types selected in profile'
             }, status=400)
         
-        # Get collections to search
+        # Use Firebase Functions if enabled
+        if getattr(settings, 'USE_FIREBASE_FUNCTIONS', False):
+            try:
+                functions_url = settings.FIREBASE_FUNCTIONS['match_opportunities']
+                response = requests.post(
+                    functions_url,
+                    json={
+                        **profile_data,
+                        'userId': str(request.user.id)  # Optional: for filtering applied/saved
+                    },
+                    timeout=30
+                )
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    return JsonResponse({
+                        'opportunities': data.get('opportunities', [])[:50],
+                        'total': data.get('total', 0),
+                    })
+                else:
+                    # Fallback to local computation
+                    print(f"Firebase Functions error: {response.status_code}")
+            except Exception as e:
+                print(f"Firebase Functions error: {e}")
+                # Fallback to local computation
+        
+        # Local computation (fallback or if Firebase Functions disabled)
         collection_map = settings.COLLECTION_MAP
         collections_to_search = set()
         for ft in profile_data['fundingTypes']:
@@ -182,6 +227,8 @@ def api_match_opportunities(request):
         })
         
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return JsonResponse({
             'error': str(e)
         }, status=500)
@@ -260,6 +307,8 @@ def api_apply(request, opp_id):
         })
         
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return JsonResponse({
             'error': str(e)
         }, status=500)
@@ -298,6 +347,8 @@ def api_save(request, opp_id):
         })
         
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return JsonResponse({
             'error': str(e)
         }, status=500)
@@ -352,6 +403,8 @@ def api_find_application_form(request):
         return JsonResponse(result)
         
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return JsonResponse({
             'error': str(e)
         }, status=500)
