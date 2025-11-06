@@ -1,6 +1,5 @@
 from django.db import models
 from django.contrib.auth.models import User
-import json
 
 
 class UserProfile(models.Model):
@@ -15,9 +14,9 @@ class UserProfile(models.Model):
     state = models.CharField(max_length=100, blank=True)
     
     # Funding preferences (stored as JSON)
-    funding_types = models.JSONField(default=list, blank=True)  # ["Grants", "Contracts", "RFPs", "Bids"]
-    interests_main = models.JSONField(default=list, blank=True)  # Main keywords
-    interests_sub = models.JSONField(default=list, blank=True)  # Sub keywords
+    funding_types = models.JSONField(default=list, blank=True)
+    interests_main = models.JSONField(default=list, blank=True)
+    interests_sub = models.JSONField(default=list, blank=True)
     
     # Statistics
     total_applied = models.IntegerField(default=0)
@@ -35,42 +34,33 @@ class UserProfile(models.Model):
 
 class Opportunity(models.Model):
     """Opportunity model synced from Firebase"""
-    # Identifiers
     firebase_id = models.CharField(max_length=255, unique=True)
-    collection_name = models.CharField(max_length=100)  # SAM, grants.gov, etc.
+    collection_name = models.CharField(max_length=100)
     
-    # Basic info
     title = models.TextField()
     description = models.TextField(blank=True, null=True)
     summary = models.TextField(blank=True, null=True)
     
-    # Organization info
     agency = models.CharField(max_length=255, blank=True, null=True)
     department = models.CharField(max_length=255, blank=True, null=True)
     
-    # Dates
     posted_date = models.DateField(null=True, blank=True)
     close_date = models.DateField(null=True, blank=True)
     deadline = models.DateField(null=True, blank=True)
     
-    # Location
     city = models.CharField(max_length=100, blank=True, null=True)
     state = models.CharField(max_length=100, blank=True, null=True)
     place = models.CharField(max_length=255, blank=True, null=True)
     
-    # URLs
     url = models.URLField(max_length=1000, blank=True, null=True)
     synopsis_url = models.URLField(max_length=1000, blank=True, null=True)
     link = models.URLField(max_length=1000, blank=True, null=True)
     
-    # Contact info
     contact_email = models.EmailField(blank=True, null=True)
     contact_phone = models.CharField(max_length=50, blank=True, null=True)
     
-    # Additional data stored as JSON
     extra_data = models.JSONField(default=dict, blank=True)
     
-    # Metadata
     last_synced = models.DateTimeField(auto_now=True)
     created_at = models.DateTimeField(auto_now_add=True)
     
@@ -83,7 +73,7 @@ class Opportunity(models.Model):
         if not self.close_date and not self.deadline:
             return "ongoing"
         
-        from datetime import datetime, timedelta
+        from datetime import datetime
         deadline = self.close_date or self.deadline
         days_until = (deadline - datetime.now().date()).days
         
@@ -108,12 +98,10 @@ class OpportunityMatch(models.Model):
     user_profile = models.ForeignKey(UserProfile, on_delete=models.CASCADE, related_name='matches')
     opportunity = models.ForeignKey(Opportunity, on_delete=models.CASCADE, related_name='matches')
     
-    # Matching metadata
     relevance_score = models.FloatField(default=0.0)
     win_rate = models.FloatField(default=0.0, help_text="Calculated win rate percentage")
-    win_rate_reasoning = models.JSONField(default=dict, blank=True, help_text="Breakdown of win rate calculation")
+    win_rate_reasoning = models.JSONField(default=dict, blank=True)
     
-    # Status
     is_viewed = models.BooleanField(default=False)
     is_dismissed = models.BooleanField(default=False)
     
@@ -134,11 +122,9 @@ class Application(models.Model):
     user_profile = models.ForeignKey(UserProfile, on_delete=models.CASCADE, related_name='applications')
     opportunity = models.ForeignKey(Opportunity, on_delete=models.CASCADE, related_name='applications')
     
-    # Application details
     application_url = models.URLField(max_length=1000, blank=True, null=True)
     application_instructions = models.TextField(blank=True, null=True)
     
-    # Status tracking
     STATUS_CHOICES = [
         ('pending', 'Pending'),
         ('submitted', 'Submitted'),
@@ -148,10 +134,8 @@ class Application(models.Model):
     ]
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     
-    # Notes
     user_notes = models.TextField(blank=True, null=True)
     
-    # Timestamps
     applied_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -169,10 +153,7 @@ class SavedOpportunity(models.Model):
     user_profile = models.ForeignKey(UserProfile, on_delete=models.CASCADE, related_name='saved_opportunities')
     opportunity = models.ForeignKey(Opportunity, on_delete=models.CASCADE, related_name='saved_by')
     
-    # Notes
     user_notes = models.TextField(blank=True, null=True)
-    
-    # Timestamps
     saved_at = models.DateTimeField(auto_now_add=True)
     
     def __str__(self):
@@ -185,18 +166,15 @@ class SavedOpportunity(models.Model):
 
 
 class ApplicationPathway(models.Model):
-    """Stores scraped application pathway information"""
+    """Stores application pathway information"""
     opportunity = models.ForeignKey(Opportunity, on_delete=models.CASCADE, related_name='pathways')
     
-    # Scraped data
     application_url = models.URLField(max_length=1000)
-    pathway_steps = models.JSONField(default=list, help_text="List of steps to reach application")
-    confidence_score = models.FloatField(default=0.0, help_text="Confidence that this is the correct pathway")
+    pathway_steps = models.JSONField(default=list)
+    confidence_score = models.FloatField(default=0.0)
     
-    # Metadata
     last_verified = models.DateTimeField(auto_now=True)
     is_active = models.BooleanField(default=True)
-    
     created_at = models.DateTimeField(auto_now_add=True)
     
     def __str__(self):

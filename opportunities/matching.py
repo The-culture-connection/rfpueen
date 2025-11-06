@@ -3,14 +3,12 @@ Intelligent matching algorithm for fundraising opportunities
 """
 import re
 from typing import List, Dict, Tuple
-from datetime import datetime, timedelta
 from .models import Opportunity, UserProfile, OpportunityMatch
 
 
 class OpportunityMatcher:
     """Matches opportunities to user profiles based on multiple criteria"""
     
-    # Collection mapping based on funding types
     COLLECTION_MAP = {
         "Contracts": ["SAM"],
         "Grants": ["grants.gov", "grantwatch"],
@@ -22,7 +20,6 @@ class OpportunityMatcher:
         self.user_profile = user_profile
         self.interests_main = [k.lower() for k in (user_profile.interests_main or [])]
         self.interests_sub = [k.lower() for k in (user_profile.interests_sub or [])]
-        self.all_keywords = self.interests_main + self.interests_sub
         
     def get_relevant_collections(self) -> List[str]:
         """Get collection names based on user's funding type preferences"""
@@ -32,10 +29,7 @@ class OpportunityMatcher:
         return list(collections)
     
     def calculate_keyword_score(self, opportunity: Opportunity) -> Tuple[float, Dict]:
-        """
-        Calculate relevance score based on keyword matches
-        Returns: (score, match_details)
-        """
+        """Calculate relevance score based on keyword matches"""
         search_text = ' '.join([
             opportunity.title or "",
             opportunity.description or "",
@@ -61,10 +55,7 @@ class OpportunityMatcher:
             if matches:
                 count = len(matches)
                 score += count * 3.0  # Main keywords worth 3x
-                match_details['main_matches'].append({
-                    'keyword': keyword,
-                    'count': count
-                })
+                match_details['main_matches'].append({'keyword': keyword, 'count': count})
         
         # Sub keywords have standard weight
         for keyword in self.interests_sub:
@@ -75,44 +66,14 @@ class OpportunityMatcher:
             if matches:
                 count = len(matches)
                 score += count * 1.0
-                match_details['sub_matches'].append({
-                    'keyword': keyword,
-                    'count': count
-                })
+                match_details['sub_matches'].append({'keyword': keyword, 'count': count})
         
         match_details['total_matches'] = len(match_details['main_matches']) + len(match_details['sub_matches'])
         
         return score, match_details
     
-    def calculate_location_score(self, opportunity: Opportunity) -> float:
-        """Bonus points for location match"""
-        if not self.user_profile.state:
-            return 0.0
-        
-        opp_state = (opportunity.state or "").lower()
-        user_state = self.user_profile.state.lower()
-        
-        if opp_state == user_state:
-            return 5.0
-        
-        return 0.0
-    
-    def calculate_urgency_multiplier(self, opportunity: Opportunity) -> float:
-        """Apply multiplier based on deadline urgency"""
-        bucket = opportunity.urgency_bucket
-        
-        if bucket == "urgent":
-            return 1.2  # 20% boost for urgent
-        elif bucket == "soon":
-            return 1.1  # 10% boost for soon
-        
-        return 1.0
-    
     def calculate_win_rate(self, opportunity: Opportunity, keyword_score: float, match_details: Dict) -> Tuple[float, Dict]:
-        """
-        Calculate win rate based on how well the opportunity matches user criteria
-        Returns: (win_rate_percentage, reasoning)
-        """
+        """Calculate win rate based on how well the opportunity matches user criteria"""
         reasoning = {
             'factors': [],
             'total_score': 0,
@@ -151,7 +112,13 @@ class OpportunityMatcher:
         })
         
         # Factor 4: Location proximity (0-10 points)
-        location_points = self.calculate_location_score(opportunity)
+        location_points = 0
+        if self.user_profile.state:
+            opp_state = (opportunity.state or "").lower()
+            user_state = self.user_profile.state.lower()
+            if opp_state == user_state:
+                location_points = 10
+        
         reasoning['factors'].append({
             'name': 'Location Match',
             'score': location_points,
@@ -188,11 +155,8 @@ class OpportunityMatcher:
         return win_rate, reasoning
     
     def match_opportunities(self, opportunities: List[Opportunity] = None) -> List[OpportunityMatch]:
-        """
-        Match opportunities to user profile and create OpportunityMatch objects
-        """
+        """Match opportunities to user profile"""
         if opportunities is None:
-            # Get opportunities from relevant collections
             relevant_collections = self.get_relevant_collections()
             if not relevant_collections:
                 return []
@@ -204,30 +168,16 @@ class OpportunityMatcher:
         matches = []
         
         for opportunity in opportunities:
-            # Calculate keyword score
             keyword_score, match_details = self.calculate_keyword_score(opportunity)
             
-            # Skip if no keyword matches
             if keyword_score == 0:
                 continue
             
-            # Calculate location bonus
-            location_score = self.calculate_location_score(opportunity)
+            urgency_multiplier = 1.2 if opportunity.urgency_bucket == "urgent" else (1.1 if opportunity.urgency_bucket == "soon" else 1.0)
+            relevance_score = keyword_score * urgency_multiplier
             
-            # Calculate urgency multiplier
-            urgency_multiplier = self.calculate_urgency_multiplier(opportunity)
+            win_rate, win_rate_reasoning = self.calculate_win_rate(opportunity, keyword_score, match_details)
             
-            # Calculate total relevance score
-            relevance_score = (keyword_score + location_score) * urgency_multiplier
-            
-            # Calculate win rate
-            win_rate, win_rate_reasoning = self.calculate_win_rate(
-                opportunity, 
-                keyword_score, 
-                match_details
-            )
-            
-            # Create or update match
             match, created = OpportunityMatch.objects.get_or_create(
                 user_profile=self.user_profile,
                 opportunity=opportunity,
@@ -239,7 +189,6 @@ class OpportunityMatcher:
             )
             
             if not created:
-                # Update existing match
                 match.relevance_score = relevance_score
                 match.win_rate = win_rate
                 match.win_rate_reasoning = win_rate_reasoning
@@ -248,10 +197,3 @@ class OpportunityMatcher:
             matches.append(match)
         
         return matches
-    
-    def get_top_matches(self, limit: int = 20) -> List[OpportunityMatch]:
-        """Get top N matches for the user"""
-        return OpportunityMatch.objects.filter(
-            user_profile=self.user_profile,
-            is_dismissed=False
-        ).select_related('opportunity').order_by('-relevance_score')[:limit]
