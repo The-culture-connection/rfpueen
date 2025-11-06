@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+
+{% block title %}Welcome to RFPueen{% endblock %}
+
+{% block extra_styles %}
+<style>
+    .hero {
+        text-align: center;
+        padding: 60px 20px;
+    }
+    
+    .hero h1 {
+        font-size: 3rem;
+        margin-bottom: 20px;
+        color: #111827;
+    }
+    
+    .hero p {
+        font-size: 1.25rem;
+        color: #6b7280;
+        margin-bottom: 32px;
+    }
+    
+    .cta-button {
+        display: inline-block;
+        padding: 16px 32px;
+        background: #685bc6;
+        color: #fff;
+        text-decoration: none;
+        border-radius: 12px;
+        font-weight: 600;
+        font-size: 1.1rem;
+        transition: all 0.3s;
+    }
+    
+    .cta-button:hover {
+        background: #5448aa;
+        transform: translateY(-2px);
+        box-shadow: 0 10px 20px rgba(104, 91, 198, 0.3);
+    }
+    
+    .features {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 24px;
+        margin-top: 60px;
+    }
+    
+    .feature {
+        background: #fff;
+        padding: 32px;
+        border-radius: 14px;
+        border: 1px solid #e5e7eb;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+    
+    .feature-icon {
+        font-size: 2.5rem;
+        margin-bottom: 16px;
+    }
+    
+    .feature h3 {
+        font-size: 1.25rem;
+        margin-bottom: 12px;
+        color: #111827;
+    }
+    
+    .feature p {
+        color: #6b7280;
+        line-height: 1.6;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="hero">
+    <h1>Find Your Perfect Opportunity</h1>
+    <p>AI-powered matching for grants, contracts, RFPs, and bids</p>
+    <a href="/explore" class="cta-button">Start Exploring →</a>
+</div>
+
+<div class="features">
+    <div class="feature">
+        <div class="feature-icon">🎯</div>
+        <h3>Smart Matching</h3>
+        <p>Advanced algorithm matches opportunities to your profile based on keywords, interests, and funding types.</p>
+    </div>
+    
+    <div class="feature">
+        <div class="feature-icon">📊</div>
+        <h3>Win Rate Analysis</h3>
+        <p>See detailed win rate calculations with reasoning for each opportunity to focus your efforts.</p>
+    </div>
+    
+    <div class="feature">
+        <div class="feature-icon">🔍</div>
+        <h3>Application Finder</h3>
+        <p>Automatically finds direct application form URLs by scraping opportunity websites.</p>
+    </div>
+    
+    <div class="feature">
+        <div class="feature-icon">💾</div>
+        <h3>Save & Track</h3>
+        <p>Save opportunities for later and track all your applications in one organized dashboard.</p>
+    </div>
+    
+    <div class="feature">
+        <div class="feature-icon">⚡</div>
+        <h3>Real-time Updates</h3>
+        <p>Stay up to date with opportunities from SAM, Grants.gov, and multiple RFP sources.</p>
+    </div>
+    
+    <div class="feature">
+        <div class="feature-icon">📈</div>
+        <h3>Urgency Tracking</h3>
+        <p>See deadline urgency at a glance with color-coded badges (urgent, soon, ongoing).</p>
+    </div>
+</div>
+{% endblock %}
