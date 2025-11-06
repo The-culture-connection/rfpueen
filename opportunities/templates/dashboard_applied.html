@@ -1,0 +1,217 @@
+{% extends "base.html" %}
+
+{% block title %}Applied Opportunities - RFPueen{% endblock %}
+
+{% block extra_styles %}
+<style>
+    /* Copy styles from explore.html for opportunity cards */
+    .opportunity-card {
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        border-radius: 14px;
+        padding: 24px;
+        margin-bottom: 16px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+    
+    .card-badges {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 12px;
+        flex-wrap: wrap;
+    }
+    
+    .badge {
+        font-size: 0.75rem;
+        padding: 4px 8px;
+        border-radius: 8px;
+        font-weight: 600;
+    }
+    
+    .badge-applied {
+        background: #d1fae5;
+        border: 1px solid #10b981;
+        color: #065f46;
+    }
+    
+    .card-title {
+        font-size: 1.25rem;
+        font-weight: 600;
+        margin-bottom: 8px;
+    }
+    
+    .card-agency {
+        color: #6b7280;
+        font-weight: 500;
+        margin-bottom: 12px;
+    }
+    
+    .card-meta {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 12px;
+        margin-bottom: 16px;
+        font-size: 0.85rem;
+        color: #6b7280;
+    }
+    
+    .card-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+    
+    .card-actions button, .card-actions a {
+        flex: 1;
+        min-width: 100px;
+        padding: 10px 16px;
+        border-radius: 10px;
+        font-weight: 600;
+        cursor: pointer;
+        text-decoration: none;
+        text-align: center;
+        transition: all 0.2s;
+    }
+    
+    .btn-primary {
+        background: #685bc6;
+        color: #fff;
+        border: none;
+    }
+    
+    .btn-secondary {
+        background: #fff;
+        color: #111827;
+        border: 1px solid #e5e7eb;
+    }
+    
+    .btn-danger {
+        background: #fff;
+        color: #dc2626;
+        border: 1px solid #e5e7eb;
+    }
+    
+    .loading {
+        text-align: center;
+        padding: 40px;
+        color: #6b7280;
+    }
+    
+    .no-results {
+        text-align: center;
+        padding: 60px 20px;
+        color: #6b7280;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<h1 style="margin-bottom: 24px;">Applied Opportunities</h1>
+<div id="results" class="loading">Loading your applied opportunities...</div>
+
+<script>
+const API_BASE = '/api';
+let csrfToken = '';
+
+// Get CSRF token
+const cookies = document.cookie.split(';');
+for (let cookie of cookies) {
+    const [name, value] = cookie.trim().split('=');
+    if (name === 'csrftoken') {
+        csrfToken = value;
+        break;
+    }
+}
+
+// Load applied opportunities
+fetch(`${API_BASE}/applied/`, {
+    credentials: 'include'
+})
+.then(response => response.json())
+.then(data => {
+    renderApplied(data.results || data);
+})
+.catch(error => {
+    console.error('Error:', error);
+    document.getElementById('results').innerHTML = 
+        '<div class="no-results"><h3>Error</h3><p>Failed to load opportunities</p></div>';
+});
+
+function renderApplied(opportunities) {
+    const results = document.getElementById('results');
+    
+    if (opportunities.length === 0) {
+        results.innerHTML = `
+            <div class="no-results">
+                <h3>No applied opportunities yet</h3>
+                <p><a href="/explore" style="color: #685bc6;">Explore opportunities</a> to get started.</p>
+            </div>`;
+        return;
+    }
+    
+    results.innerHTML = `<div style="margin-bottom: 16px; color: #6b7280;">${opportunities.length} applied opportunit${opportunities.length !== 1 ? 'ies' : 'y'}</div>` +
+        opportunities.map(opp => renderCard(opp)).join('');
+}
+
+function renderCard(opp) {
+    const appliedDate = opp.applied_at ? new Date(opp.applied_at).toLocaleDateString() : '—';
+    const deadline = opp.data?.closeDate || opp.data?.deadline || '';
+    const location = opp.data?.place || '—';
+    
+    return `
+        <div class="opportunity-card" data-id="${opp.id}">
+            <div class="card-badges">
+                <span class="badge" style="background: #f9fafb; border: 1px solid #e5e7eb;">${opp.collection || 'Applied'}</span>
+                <span class="badge badge-applied">Applied</span>
+                ${opp.win_rate ? `<span class="badge" style="background: #f3f4f6; border: 1px solid #685bc6; color: #685bc6;">Win Rate: ${opp.win_rate.toFixed(1)}%</span>` : ''}
+            </div>
+            
+            <div class="card-title">${opp.title || 'Untitled'}</div>
+            <div class="card-agency">${opp.agency || 'Unknown Agency'}</div>
+            
+            <div class="card-meta">
+                <div><strong>Applied:</strong> ${appliedDate}</div>
+                <div><strong>Deadline:</strong> ${deadline ? new Date(deadline).toLocaleDateString() : '—'}</div>
+                <div><strong>Location:</strong> ${location}</div>
+            </div>
+            
+            <div class="card-actions">
+                ${opp.application_url ? 
+                    `<a href="${opp.application_url}" target="_blank" class="btn-primary">Open Application Form</a>` :
+                    `<button onclick="showInstructions(${opp.id})" class="btn-secondary">View Instructions</button>`
+                }
+                <a href="${opp.url || '#'}" target="_blank" class="btn-secondary">View Details</a>
+                <button onclick="removeApplied(${opp.id}, '${opp.opportunity_id}')" class="btn-danger">Remove</button>
+            </div>
+        </div>
+    `;
+}
+
+window.showInstructions = function(id) {
+    alert('Application instructions feature coming soon!');
+};
+
+window.removeApplied = async function(id, oppId) {
+    if (!confirm('Remove this from your applied list?')) return;
+    
+    try {
+        const response = await fetch(`${API_BASE}/applied/${id}/`, {
+            method: 'DELETE',
+            headers: {
+                'X-CSRFToken': csrfToken
+            },
+            credentials: 'include'
+        });
+        
+        if (response.ok) {
+            document.querySelector(`[data-id="${id}"]`).remove();
+        } else {
+            alert('Failed to remove');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Failed to remove');
+    }
+};
+</script>
+{% endblock %}
