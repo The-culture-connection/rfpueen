@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Applied Opportunities - RFP Queen</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: Inter, system-ui, Arial, sans-serif;
+            background: #f9fafb;
+            color: #111827;
+        }
+        .container {
+            max-width: 960px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        .btn {
+            padding: 8px 12px;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            background: #fff;
+            color: #111827;
+            text-decoration: none;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+        .opportunity-card {
+            border: 1px solid #e5e7eb;
+            border-radius: 14px;
+            padding: 20px;
+            margin: 12px 0;
+            background: #fff;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .card-header {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+        }
+        .badge {
+            font-size: 0.75rem;
+            padding: 4px 8px;
+            border-radius: 8px;
+            font-weight: 600;
+        }
+        .badge-applied {
+            border: 1px solid #10b981;
+            background: #d1fae5;
+            color: #065f46;
+        }
+        .card-title {
+            font-weight: 600;
+            font-size: 1.25rem;
+            margin-bottom: 6px;
+        }
+        .card-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-top: 12px;
+        }
+        .action-btn {
+            padding: 10px 16px;
+            border-radius: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            flex: 1;
+            min-width: 100px;
+            text-decoration: none;
+            text-align: center;
+            display: inline-block;
+        }
+        .btn-primary {
+            background: #685bc6;
+            color: #fff;
+            border: 0;
+        }
+        .btn-secondary {
+            border: 1px solid #e5e7eb;
+            background: #fff;
+            color: #111827;
+        }
+        .btn-danger {
+            border: 1px solid #e5e7eb;
+            background: #fff;
+            color: #dc2626;
+        }
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .modal-content {
+            background: #fff;
+            border-radius: 14px;
+            padding: 24px;
+            max-width: 600px;
+            width: 100%;
+            max-height: 80vh;
+            overflow: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div>
+                <strong>Applied Opportunities</strong> • Signed in as {{ user.username }}
+            </div>
+            <div style="display: flex; gap: 8px;">
+                <a href="{% url 'opportunities:explore' %}" class="btn">Explore</a>
+                <a href="{% url 'opportunities:dashboard_saved' %}" class="btn">Saved</a>
+                <a href="{% url 'admin:logout' %}" class="btn">Sign out</a>
+            </div>
+        </div>
+        
+        {% if applied_opportunities %}
+            <div style="margin: 16px 0; color: #6b7280; font-size: 0.9rem">
+                {{ applied_opportunities|length }} applied opportunity{{ applied_opportunities|length|pluralize }}
+            </div>
+            
+            {% for applied in applied_opportunities %}
+                <div class="opportunity-card">
+                    <div class="card-header">
+                        <span class="badge">{{ applied.firebase_collection|upper }}</span>
+                        <span class="badge badge-applied">Applied</span>
+                        {% if applied.win_rate %}
+                            <span class="badge" style="border: 1px solid #685bc6; background: #f3f4f6; color: #685bc6">
+                                Win Rate: {{ applied.win_rate }}%
+                            </span>
+                        {% endif %}
+                    </div>
+                    <div class="card-title">{{ applied.opportunity.title|default:"Untitled Opportunity" }}</div>
+                    <div style="color: #6b7280; margin-bottom: 8px; font-weight: 500">
+                        {{ applied.opportunity.agency|default:"Unknown Agency" }}
+                    </div>
+                    {% if applied.win_rate_reasoning %}
+                        <div style="margin-bottom: 12px; padding: 8px; background: #f0f9ff; border-radius: 8px; font-size: 0.9rem; color: #374151">
+                            <strong>Reasoning:</strong> {{ applied.win_rate_reasoning }}
+                        </div>
+                    {% endif %}
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin-bottom: 12px; font-size: 0.85rem; color: #6b7280">
+                        <div><strong>Applied:</strong> {{ applied.applied_at|date:"M d, Y" }}</div>
+                        <div><strong>Deadline:</strong> {{ applied.opportunity.close_date|date:"M d, Y"|default:"—" }}</div>
+                    </div>
+                    <div class="card-actions">
+                        {% if applied.application_url %}
+                            <a href="{{ applied.application_url }}" target="_blank" class="action-btn btn-primary">
+                                Open Application Form
+                            </a>
+                        {% elif applied.application_instructions %}
+                            <button onclick="showInstructions({{ forloop.counter0 }})" class="action-btn btn-primary">
+                                View Instructions
+                            </button>
+                        {% endif %}
+                        {% if applied.opportunity.url %}
+                            <a href="{{ applied.opportunity.url }}" target="_blank" class="action-btn btn-secondary">
+                                View Details
+                            </a>
+                        {% endif %}
+                        <button onclick="removeApplied('{{ applied.firebase_opportunity_id }}')" 
+                                class="action-btn btn-danger">
+                            Remove
+                        </button>
+                    </div>
+                </div>
+                
+                {% if applied.application_instructions %}
+                    <div id="instructions-{{ forloop.counter0 }}" style="display: none;">
+                        {{ applied.application_instructions }}
+                    </div>
+                {% endif %}
+            {% endfor %}
+        {% else %}
+            <div style="text-align: center; color: #6b7280; padding: 40px">
+                No applied opportunities yet. <a href="{% url 'opportunities:explore' %}" style="color: #685bc6">Explore opportunities</a> to get started.
+            </div>
+        {% endif %}
+    </div>
+    
+    <script>
+        const csrfToken = '{{ csrf_token }}';
+        const appliedOpportunities = [
+            {% for applied in applied_opportunities %}
+            {
+                id: '{{ applied.firebase_opportunity_id }}',
+                title: {{ applied.opportunity.title|escapejs|safe }},
+                instructions: {{ applied.application_instructions|escapejs|safe|default:"null" }},
+            }{% if not forloop.last %},{% endif %}
+            {% endfor %}
+        ];
+        
+        function showInstructions(index) {
+            const opp = appliedOpportunities[index];
+            if (!opp || !opp.instructions) return;
+            
+            const modal = document.createElement('div');
+            modal.className = 'modal';
+            modal.innerHTML = `
+                <div class="modal-content">
+                    <h2 style="margin: 0 0 12px">Application Instructions</h2>
+                    <h3 style="margin: 0 0 8px; font-size: 1.1rem">${opp.title || 'Opportunity'}</h3>
+                    <div style="white-space: pre-line; line-height: 1.6; color: #374151; margin-bottom: 16px; padding: 12px; background: #f9fafb; border-radius: 8px">
+                        ${opp.instructions}
+                    </div>
+                    <button onclick="this.closest('.modal').remove()" 
+                            style="padding: 10px 20px; border: 0; border-radius: 10px; background: #111827; color: #fff; font-weight: 600; cursor: pointer; width: 100%">
+                        Close
+                    </button>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+        
+        async function removeApplied(oppId) {
+            if (!confirm('Remove this opportunity from your applied list?')) return;
+            
+            try {
+                const response = await fetch(`/api/remove-applied/${oppId}/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken,
+                    },
+                });
+                
+                if (response.ok) {
+                    location.reload();
+                } else {
+                    alert('Error removing opportunity');
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+    </script>
+</body>
+</html>

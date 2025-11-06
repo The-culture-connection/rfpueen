@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Explore Opportunities - RFP Queen</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: Inter, system-ui, Arial, sans-serif;
+            background: #f9fafb;
+            color: #111827;
+        }
+        .container {
+            max-width: 960px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        .btn {
+            padding: 8px 12px;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            background: #fff;
+            color: #111827;
+            text-decoration: none;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+        .btn-primary {
+            background: #111827;
+            color: #fff;
+            border-color: #111827;
+        }
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .opportunity-card {
+            border: 1px solid #e5e7eb;
+            border-radius: 14px;
+            padding: 20px;
+            margin: 12px 0;
+            background: #fff;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .card-header {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+        }
+        .badge {
+            font-size: 0.75rem;
+            padding: 4px 8px;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            background: #f9fafb;
+            text-transform: uppercase;
+        }
+        .badge-urgent {
+            border-color: #dc2626;
+            background: #fee2e2;
+            color: #dc2626;
+        }
+        .badge-soon {
+            border-color: #f59e0b;
+            background: #fef3c7;
+            color: #f59e0b;
+        }
+        .badge-match {
+            border-color: #685bc6;
+            background: #f3f4f6;
+            color: #685bc6;
+        }
+        .card-title {
+            font-weight: 600;
+            font-size: 1.25rem;
+            margin-bottom: 6px;
+            color: #111827;
+        }
+        .card-agency {
+            color: #6b7280;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+        .card-description {
+            color: #374151;
+            font-size: 0.9rem;
+            line-height: 1.6;
+            margin-bottom: 12px;
+        }
+        .card-meta {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 8px;
+            margin-bottom: 12px;
+            font-size: 0.85rem;
+            color: #6b7280;
+        }
+        .card-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-top: 12px;
+        }
+        .action-btn {
+            padding: 10px 16px;
+            border: 0;
+            border-radius: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            flex: 1;
+            min-width: 100px;
+        }
+        .btn-apply {
+            background: #685bc6;
+            color: #fff;
+        }
+        .btn-save {
+            border: 1px solid #e5e7eb;
+            background: #fff;
+            color: #111827;
+        }
+        .btn-pass {
+            border: 1px solid #e5e7eb;
+            background: #fff;
+            color: #6b7280;
+        }
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .modal-content {
+            background: #fff;
+            border-radius: 14px;
+            padding: 24px;
+            max-width: 600px;
+            width: 100%;
+            max-height: 80vh;
+            overflow: auto;
+        }
+        .error {
+            max-width: 960px;
+            margin: 16px auto;
+            padding: 12px;
+            border: 1px solid #fecaca;
+            background: #fef2f2;
+            color: #991b1b;
+            border-radius: 10px;
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #6b7280;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div>Signed in as <strong>{{ user.username }}</strong></div>
+            <div style="display: flex; gap: 8px;">
+                <button id="findMatchesBtn" class="btn btn-primary">Find Matches</button>
+                <a href="{% url 'opportunities:dashboard' %}" class="btn">Dashboard</a>
+                <a href="{% url 'admin:logout' %}" class="btn">Sign out</a>
+            </div>
+        </div>
+        
+        <div id="errorContainer"></div>
+        <div id="opportunitiesContainer">
+            <div class="loading">No matches yet. Click <em>Find Matches</em> to discover opportunities.</div>
+        </div>
+    </div>
+    
+    <script>
+        const csrfToken = '{{ csrf_token }}';
+        let opportunities = [];
+        
+        document.getElementById('findMatchesBtn').addEventListener('click', findMatches);
+        
+        async function findMatches() {
+            const btn = document.getElementById('findMatchesBtn');
+            btn.disabled = true;
+            btn.textContent = 'Finding Matches...';
+            
+            const container = document.getElementById('opportunitiesContainer');
+            container.innerHTML = '<div class="loading">Searching for opportunities...</div>';
+            
+            try {
+                const response = await fetch('/api/match/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken,
+                    },
+                });
+                
+                const data = await response.json();
+                
+                if (data.error) {
+                    showError(data.error);
+                    container.innerHTML = '<div class="loading">No matches found.</div>';
+                } else {
+                    opportunities = data.opportunities || [];
+                    renderOpportunities();
+                }
+            } catch (error) {
+                showError('Error finding matches: ' + error.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Find Matches';
+            }
+        }
+        
+        function renderOpportunities() {
+            const container = document.getElementById('opportunitiesContainer');
+            
+            if (opportunities.length === 0) {
+                container.innerHTML = '<div class="loading">No matches found.</div>';
+                return;
+            }
+            
+            container.innerHTML = opportunities.map((opp, index) => {
+                const urgency = opp.urgency_bucket || 'ongoing';
+                const urgencyClass = urgency === 'urgent' ? 'badge-urgent' : urgency === 'soon' ? 'badge-soon' : '';
+                
+                return `
+                    <div class="opportunity-card" data-index="${index}">
+                        <div class="card-header">
+                            <span class="badge">${opp.collection || 'match'}</span>
+                            <span class="badge ${urgencyClass}">${urgency}</span>
+                            ${opp.score ? `<span class="badge badge-match">Match: ${opp.score}</span>` : ''}
+                            ${opp.win_rate ? `<span class="badge badge-match">Win Rate: ${opp.win_rate}%</span>` : ''}
+                        </div>
+                        <div class="card-title">${opp.title || 'Untitled Opportunity'}</div>
+                        <div class="card-agency">${opp.agency || opp.department || 'Unknown Agency'}</div>
+                        <div class="card-description">
+                            ${(opp.description || opp.summary || '').substring(0, 200)}${(opp.description || opp.summary || '').length > 200 ? '...' : ''}
+                        </div>
+                        <div class="card-meta">
+                            <div><strong>Posted:</strong> ${opp.openDate || opp.postedDate || '—'}</div>
+                            <div><strong>Deadline:</strong> ${opp.closeDate || opp.deadline || '—'}</div>
+                            <div><strong>Location:</strong> ${opp.place || [opp.city, opp.state].filter(Boolean).join(', ') || '—'}</div>
+                        </div>
+                        <div class="card-actions">
+                            <button class="action-btn btn-apply" onclick="handleApply(${index})">Apply</button>
+                            <button class="action-btn btn-save" onclick="handleSave(${index})">Save for Later</button>
+                            <button class="action-btn btn-pass" onclick="handlePass(${index})">Pass</button>
+                        </div>
+                        ${opp.url || opp.synopsisUrl || opp.link ? `
+                            <div style="margin-top: 10px;">
+                                <a href="${opp.url || opp.synopsisUrl || opp.link}" target="_blank" 
+                                   style="color: #685bc6; text-decoration: none; font-size: 0.9rem; font-weight: 500">
+                                    View full details →
+                                </a>
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        async function handleApply(index) {
+            const opp = opportunities[index];
+            if (!opp) return;
+            
+            try {
+                const response = await fetch(`/api/apply/${opp.id}/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken,
+                    },
+                    body: JSON.stringify({
+                        collection: opp.collection,
+                        title: opp.title,
+                        ...opp
+                    }),
+                });
+                
+                const data = await response.json();
+                
+                if (data.error) {
+                    alert('Error: ' + data.error);
+                    return;
+                }
+                
+                // Remove from list
+                opportunities.splice(index, 1);
+                renderOpportunities();
+                
+                // Show application form or instructions
+                if (data.application_url) {
+                    window.open(data.application_url, '_blank');
+                } else if (data.application_instructions) {
+                    showApplicationModal(opp, data.application_instructions, data.win_rate, data.win_rate_reasoning);
+                }
+            } catch (error) {
+                alert('Error applying: ' + error.message);
+            }
+        }
+        
+        async function handleSave(index) {
+            const opp = opportunities[index];
+            if (!opp) return;
+            
+            try {
+                const response = await fetch(`/api/save/${opp.id}/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken,
+                    },
+                    body: JSON.stringify({
+                        collection: opp.collection,
+                        ...opp
+                    }),
+                });
+                
+                const data = await response.json();
+                
+                if (data.error) {
+                    alert('Error: ' + data.error);
+                    return;
+                }
+                
+                // Remove from list
+                opportunities.splice(index, 1);
+                renderOpportunities();
+            } catch (error) {
+                alert('Error saving: ' + error.message);
+            }
+        }
+        
+        function handlePass(index) {
+            opportunities.splice(index, 1);
+            renderOpportunities();
+        }
+        
+        function showApplicationModal(opp, instructions, winRate, reasoning) {
+            const modal = document.createElement('div');
+            modal.className = 'modal';
+            modal.innerHTML = `
+                <div class="modal-content">
+                    <h2 style="margin: 0 0 12px">Application Instructions</h2>
+                    <h3 style="margin: 0 0 8px; font-size: 1.1rem">${opp.title || 'Opportunity'}</h3>
+                    ${winRate ? `<div style="margin-bottom: 12px; padding: 8px; background: #f0f9ff; border-radius: 8px;">
+                        <strong>Win Rate: ${winRate}%</strong>
+                        <div style="font-size: 0.9rem; color: #374151; margin-top: 4px;">${reasoning || ''}</div>
+                    </div>` : ''}
+                    <div style="white-space: pre-line; line-height: 1.6; color: #374151; margin-bottom: 16px; padding: 12px; background: #f9fafb; border-radius: 8px">
+                        ${instructions}
+                    </div>
+                    ${opp.url ? `<div style="margin-bottom: 16px">
+                        <a href="${opp.url}" target="_blank" style="color: #685bc6; text-decoration: none; font-weight: 600">
+                            View Opportunity Page →
+                        </a>
+                    </div>` : ''}
+                    <button onclick="this.closest('.modal').remove()" 
+                            style="padding: 10px 20px; border: 0; border-radius: 10px; background: #111827; color: #fff; font-weight: 600; cursor: pointer; width: 100%">
+                        Close
+                    </button>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+        
+        function showError(message) {
+            const container = document.getElementById('errorContainer');
+            container.innerHTML = `<div class="error"><strong>Error:</strong> ${message}</div>`;
+        }
+    </script>
+</body>
+</html>

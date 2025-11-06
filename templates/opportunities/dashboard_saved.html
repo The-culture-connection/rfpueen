@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Saved Opportunities - RFP Queen</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: Inter, system-ui, Arial, sans-serif;
+            background: #f9fafb;
+            color: #111827;
+        }
+        .container {
+            max-width: 960px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        .btn {
+            padding: 8px 12px;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            background: #fff;
+            color: #111827;
+            text-decoration: none;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+        .opportunity-card {
+            border: 1px solid #e5e7eb;
+            border-radius: 14px;
+            padding: 20px;
+            margin: 12px 0;
+            background: #fff;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .card-header {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+        }
+        .badge {
+            font-size: 0.75rem;
+            padding: 4px 8px;
+            border-radius: 8px;
+            font-weight: 600;
+        }
+        .badge-saved {
+            border: 1px solid #3b82f6;
+            background: #dbeafe;
+            color: #1e40af;
+        }
+        .card-title {
+            font-weight: 600;
+            font-size: 1.25rem;
+            margin-bottom: 6px;
+        }
+        .card-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-top: 12px;
+        }
+        .action-btn {
+            padding: 10px 16px;
+            border-radius: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            flex: 1;
+            min-width: 100px;
+            text-decoration: none;
+            text-align: center;
+            display: inline-block;
+        }
+        .btn-primary {
+            background: #685bc6;
+            color: #fff;
+            border: 0;
+        }
+        .btn-secondary {
+            border: 1px solid #e5e7eb;
+            background: #fff;
+            color: #111827;
+        }
+        .btn-danger {
+            border: 1px solid #e5e7eb;
+            background: #fff;
+            color: #dc2626;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div>
+                <strong>Saved Opportunities</strong> • Signed in as {{ user.username }}
+            </div>
+            <div style="display: flex; gap: 8px;">
+                <a href="{% url 'opportunities:explore' %}" class="btn">Explore</a>
+                <a href="{% url 'opportunities:dashboard_applied' %}" class="btn">Applied</a>
+                <a href="{% url 'admin:logout' %}" class="btn">Sign out</a>
+            </div>
+        </div>
+        
+        {% if saved_opportunities %}
+            <div style="margin: 16px 0; color: #6b7280; font-size: 0.9rem">
+                {{ saved_opportunities|length }} saved opportunity{{ saved_opportunities|length|pluralize }}
+            </div>
+            
+            {% for saved in saved_opportunities %}
+                <div class="opportunity-card">
+                    <div class="card-header">
+                        <span class="badge">{{ saved.firebase_collection|upper }}</span>
+                        <span class="badge badge-saved">Saved</span>
+                    </div>
+                    <div class="card-title">{{ saved.opportunity.title|default:"Untitled Opportunity" }}</div>
+                    <div style="color: #6b7280; margin-bottom: 8px; font-weight: 500">
+                        {{ saved.opportunity.agency|default:"Unknown Agency" }}
+                    </div>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin-bottom: 12px; font-size: 0.85rem; color: #6b7280">
+                        <div><strong>Saved:</strong> {{ saved.saved_at|date:"M d, Y" }}</div>
+                        <div><strong>Deadline:</strong> {{ saved.opportunity.close_date|date:"M d, Y"|default:"—" }}</div>
+                    </div>
+                    <div class="card-actions">
+                        <button onclick="handleApply('{{ saved.firebase_opportunity_id }}', '{{ saved.firebase_collection }}', {{ forloop.counter0 }})" 
+                                class="action-btn btn-primary">
+                            Apply Now
+                        </button>
+                        {% if saved.opportunity.url %}
+                            <a href="{{ saved.opportunity.url }}" target="_blank" class="action-btn btn-secondary">
+                                View Details
+                            </a>
+                        {% endif %}
+                        <button onclick="removeSaved('{{ saved.firebase_opportunity_id }}')" 
+                                class="action-btn btn-danger">
+                            Remove
+                        </button>
+                    </div>
+                </div>
+            {% endfor %}
+        {% else %}
+            <div style="text-align: center; color: #6b7280; padding: 40px">
+                No saved opportunities yet. <a href="{% url 'opportunities:explore' %}" style="color: #685bc6">Explore opportunities</a> to save some.
+            </div>
+        {% endif %}
+    </div>
+    
+    <script>
+        const csrfToken = '{{ csrf_token }}';
+        
+        async function handleApply(oppId, collection, index) {
+            try {
+                const response = await fetch(`/api/apply/${oppId}/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken,
+                    },
+                    body: JSON.stringify({
+                        collection: collection,
+                    }),
+                });
+                
+                const data = await response.json();
+                
+                if (data.error) {
+                    alert('Error: ' + data.error);
+                    return;
+                }
+                
+                // Remove from saved and reload
+                await removeSaved(oppId);
+                
+                // Show application form or instructions
+                if (data.application_url) {
+                    window.open(data.application_url, '_blank');
+                } else if (data.application_instructions) {
+                    alert('Application Instructions:\n\n' + data.application_instructions);
+                }
+            } catch (error) {
+                alert('Error applying: ' + error.message);
+            }
+        }
+        
+        async function removeSaved(oppId) {
+            if (!confirm('Remove this opportunity from your saved list?')) return;
+            
+            try {
+                const response = await fetch(`/api/remove-saved/${oppId}/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken,
+                    },
+                });
+                
+                if (response.ok) {
+                    location.reload();
+                } else {
+                    alert('Error removing opportunity');
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+    </script>
+</body>
+</html>

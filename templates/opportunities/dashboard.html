@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - RFP Queen</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: Inter, system-ui, Arial, sans-serif;
+            background: #f9fafb;
+            color: #111827;
+        }
+        .container {
+            max-width: 960px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        .header h1 {
+            color: #6b7280;
+            font-size: 1.25rem;
+        }
+        .header strong {
+            color: #111827;
+        }
+        .nav-buttons {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .btn {
+            padding: 8px 12px;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            background: #fff;
+            color: #111827;
+            text-decoration: none;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+        .btn-primary {
+            background: #685bc6;
+            color: #fff;
+            border-color: #685bc6;
+        }
+        .btn:hover {
+            opacity: 0.9;
+        }
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .card {
+            border: 1px solid #e5e7eb;
+            border-radius: 14px;
+            padding: 24px;
+            background: #fff;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            cursor: pointer;
+            transition: transform 0.2s;
+            text-decoration: none;
+            color: inherit;
+            display: block;
+        }
+        .card:hover {
+            transform: translateY(-2px);
+        }
+        .card-icon {
+            font-size: 2rem;
+            margin-bottom: 8px;
+        }
+        .card h3 {
+            margin: 0 0 8px;
+            color: #111827;
+        }
+        .card p {
+            margin: 0;
+            color: #6b7280;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div>
+                <h1><strong>Dashboard</strong> • Signed in as {{ user.username }}</h1>
+            </div>
+            <div class="nav-buttons">
+                <a href="{% url 'opportunities:explore' %}" class="btn btn-primary">Explore</a>
+                <a href="{% url 'opportunities:dashboard_applied' %}" class="btn">Applied</a>
+                <a href="{% url 'opportunities:dashboard_saved' %}" class="btn">Saved</a>
+                <a href="{% url 'admin:logout' %}" class="btn">Sign out</a>
+            </div>
+        </div>
+        
+        <div class="cards-grid">
+            <a href="{% url 'opportunities:explore' %}" class="card">
+                <div class="card-icon">🔍</div>
+                <h3>Explore Opportunities</h3>
+                <p>Find new opportunities matched to your profile</p>
+            </a>
+            
+            <a href="{% url 'opportunities:dashboard_applied' %}" class="card">
+                <div class="card-icon">📝</div>
+                <h3>Applied Opportunities</h3>
+                <p>{{ applied_count }} opportunity{{ applied_count|pluralize }} you've applied to</p>
+            </a>
+            
+            <a href="{% url 'opportunities:dashboard_saved' %}" class="card">
+                <div class="card-icon">💾</div>
+                <h3>Saved Opportunities</h3>
+                <p>{{ saved_count }} opportunity{{ saved_count|pluralize }} saved for later</p>
+            </a>
+        </div>
+    </div>
+</body>
+</html>
