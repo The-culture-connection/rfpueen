@@ -7,6 +7,7 @@ from django.conf import settings
 from .models import Opportunity, UserProfile
 from datetime import datetime
 import logging
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -30,18 +31,21 @@ class FirebaseService:
         except ValueError:
             # Initialize new app
             try:
-                if hasattr(settings, 'FIREBASE_SERVICE_ACCOUNT_PATH'):
-                    cred = credentials.Certificate(settings.FIREBASE_SERVICE_ACCOUNT_PATH)
+                service_account_path = getattr(settings, 'FIREBASE_SERVICE_ACCOUNT_PATH', None)
+                
+                if service_account_path and os.path.exists(service_account_path):
+                    cred = credentials.Certificate(service_account_path)
                     firebase_admin.initialize_app(cred)
                 else:
-                    # Use default credentials or application default
+                    # Use application default credentials or environment
                     firebase_admin.initialize_app()
                 
                 cls._initialized = True
                 logger.info("Firebase Admin SDK initialized successfully")
             except Exception as e:
                 logger.error(f"Failed to initialize Firebase: {e}")
-                raise
+                # Don't raise - allow app to continue with limited functionality
+                cls._initialized = False
     
     @classmethod
     def get_db(cls):
@@ -49,8 +53,12 @@ class FirebaseService:
         if not cls._initialized:
             cls.initialize()
         
-        if cls._db is None:
-            cls._db = firestore.client()
+        if cls._db is None and cls._initialized:
+            try:
+                cls._db = firestore.client()
+            except Exception as e:
+                logger.error(f"Failed to get Firestore client: {e}")
+                return None
         
         return cls._db
     
@@ -60,61 +68,69 @@ class FirebaseService:
         Sync opportunities from a specific Firebase collection
         """
         db = cls.get_db()
-        collection_ref = db.collection(collection_name)
+        if not db:
+            logger.warning("Firestore not available")
+            return 0
         
-        if limit:
-            docs = collection_ref.limit(limit).stream()
-        else:
-            docs = collection_ref.stream()
-        
-        synced_count = 0
-        
-        for doc in docs:
-            try:
-                data = doc.to_dict()
-                
-                # Parse dates
-                posted_date = cls._parse_date(data.get('openDate') or data.get('postedDate'))
-                close_date = cls._parse_date(data.get('closeDate') or data.get('deadline'))
-                
-                # Create or update opportunity
-                opportunity, created = Opportunity.objects.update_or_create(
-                    firebase_id=doc.id,
-                    collection_name=collection_name,
-                    defaults={
-                        'title': data.get('title', 'Untitled'),
-                        'description': data.get('description', ''),
-                        'summary': data.get('summary', ''),
-                        'agency': data.get('agency', ''),
-                        'department': data.get('department', ''),
-                        'posted_date': posted_date,
-                        'close_date': close_date,
-                        'deadline': close_date,
-                        'city': data.get('city', ''),
-                        'state': data.get('state', ''),
-                        'place': data.get('place', ''),
-                        'url': data.get('url') or data.get('synopsisUrl') or data.get('link', ''),
-                        'synopsis_url': data.get('synopsisUrl', ''),
-                        'link': data.get('link', ''),
-                        'contact_email': data.get('contactEmail', ''),
-                        'contact_phone': data.get('contactPhone', ''),
-                        'extra_data': data
-                    }
-                )
-                
-                synced_count += 1
-                
-                if created:
-                    logger.info(f"Created new opportunity: {opportunity.title[:50]}")
-                else:
-                    logger.debug(f"Updated opportunity: {opportunity.title[:50]}")
+        try:
+            collection_ref = db.collection(collection_name)
+            
+            if limit:
+                docs = collection_ref.limit(limit).stream()
+            else:
+                docs = collection_ref.stream()
+            
+            synced_count = 0
+            
+            for doc in docs:
+                try:
+                    data = doc.to_dict()
                     
-            except Exception as e:
-                logger.error(f"Error syncing opportunity {doc.id}: {e}")
-                continue
-        
-        logger.info(f"Synced {synced_count} opportunities from {collection_name}")
-        return synced_count
+                    # Parse dates
+                    posted_date = cls._parse_date(data.get('openDate') or data.get('postedDate'))
+                    close_date = cls._parse_date(data.get('closeDate') or data.get('deadline'))
+                    
+                    # Create or update opportunity
+                    opportunity, created = Opportunity.objects.update_or_create(
+                        firebase_id=doc.id,
+                        collection_name=collection_name,
+                        defaults={
+                            'title': data.get('title', 'Untitled'),
+                            'description': data.get('description', ''),
+                            'summary': data.get('summary', ''),
+                            'agency': data.get('agency', ''),
+                            'department': data.get('department', ''),
+                            'posted_date': posted_date,
+                            'close_date': close_date,
+                            'deadline': close_date,
+                            'city': data.get('city', ''),
+                            'state': data.get('state', ''),
+                            'place': data.get('place', ''),
+                            'url': data.get('url') or data.get('synopsisUrl') or data.get('link', ''),
+                            'synopsis_url': data.get('synopsisUrl', ''),
+                            'link': data.get('link', ''),
+                            'contact_email': data.get('contactEmail', ''),
+                            'contact_phone': data.get('contactPhone', ''),
+                            'extra_data': data
+                        }
+                    )
+                    
+                    synced_count += 1
+                    
+                    if created:
+                        logger.info(f"Created new opportunity: {opportunity.title[:50]}")
+                    else:
+                        logger.debug(f"Updated opportunity: {opportunity.title[:50]}")
+                        
+                except Exception as e:
+                    logger.error(f"Error syncing opportunity {doc.id}: {e}")
+                    continue
+            
+            logger.info(f"Synced {synced_count} opportunities from {collection_name}")
+            return synced_count
+        except Exception as e:
+            logger.error(f"Error accessing collection {collection_name}: {e}")
+            return 0
     
     @classmethod
     def sync_all_opportunities(cls, collections: list = None, limit_per_collection: int = None):
@@ -143,6 +159,8 @@ class FirebaseService:
         Get user profile data from Firebase
         """
         db = cls.get_db()
+        if not db:
+            return None
         
         try:
             profile_ref = db.collection('profiles').document(firebase_uid)
@@ -195,6 +213,12 @@ class FirebaseService:
         """
         Verify Firebase ID token and return user info
         """
+        if not cls._initialized:
+            cls.initialize()
+        
+        if not cls._initialized:
+            return None
+        
         try:
             decoded_token = auth.verify_id_token(id_token)
             return decoded_token
