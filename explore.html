@@ -13,11 +13,58 @@
     profile: null
   };
 
-  function show(html){
-    root.innerHTML = html + `<pre id="cc-debug" style="max-width:960px;margin:12px auto;padding:10px;border:1px dashed #e5e7eb;border-radius:10px;background:#f9fafb;color:#374151;white-space:pre-wrap;font:12px/1.4 ui-monospace,monospace;display:none">${state.logs.join("\n")}</pre>`;
+  function show(html, errorMsg = null){
+    const errorHtml = errorMsg ? `
+      <div id="error-banner" style="max-width:960px;margin:16px auto;padding:16px;border:2px solid #dc2626;border-radius:12px;background:#fee2e2;color:#991b1b;box-shadow:0 2px 4px rgba(0,0,0,0.1)">
+        <div style="display:flex;align-items:start;gap:12px">
+          <div style="font-size:1.5rem;line-height:1">⚠️</div>
+          <div style="flex:1">
+            <strong style="font-size:1.1rem;display:block;margin-bottom:6px">Error</strong>
+            <div style="line-height:1.6;white-space:pre-wrap">${errorMsg}</div>
+            <button onclick="document.getElementById('error-banner').style.display='none'" style="margin-top:12px;padding:6px 12px;border:1px solid #991b1b;border-radius:6px;background:#fff;color:#991b1b;cursor:pointer;font-weight:600">Dismiss</button>
+          </div>
+        </div>
+      </div>` : "";
+    root.innerHTML = errorHtml + html;
   }
-  function log(m){ state.logs.push(String(m)); const d=document.getElementById("cc-debug"); if(d) d.textContent = state.logs.join("\n"); }
-  function status(msg){ show(`<div style="max-width:960px;margin:20px auto;padding:14px;border:1px solid #e5e7eb;border-radius:12px;background:#fff">${msg}</div>`); }
+  
+  function showError(msg, details = null) {
+    const errorMsg = details ? `${msg}\n\nDetails: ${details}` : msg;
+    const currentHtml = root.innerHTML.replace(/<div id="error-banner"[^>]*>[\s\S]*?<\/div>/gi, '');
+    show(currentHtml, errorMsg);
+  }
+  
+  function showInfo(msg, type = "info") {
+    const colors = {
+      info: { bg: "#dbeafe", border: "#3b82f6", text: "#1e40af", icon: "ℹ️" },
+      success: { bg: "#d1fae5", border: "#10b981", text: "#065f46", icon: "✅" },
+      warning: { bg: "#fef3c7", border: "#f59e0b", text: "#92400e", icon: "⚠️" }
+    };
+    const c = colors[type] || colors.info;
+    const infoHtml = `
+      <div id="info-banner" style="max-width:960px;margin:16px auto;padding:16px;border:2px solid ${c.border};border-radius:12px;background:${c.bg};color:${c.text};box-shadow:0 2px 4px rgba(0,0,0,0.1)">
+        <div style="display:flex;align-items:start;gap:12px">
+          <div style="font-size:1.5rem;line-height:1">${c.icon}</div>
+          <div style="flex:1">
+            <div style="line-height:1.6;white-space:pre-wrap">${msg}</div>
+            <button onclick="document.getElementById('info-banner').style.display='none'" style="margin-top:12px;padding:6px 12px;border:1px solid ${c.border};border-radius:6px;background:#fff;color:${c.text};cursor:pointer;font-weight:600">Dismiss</button>
+          </div>
+        </div>
+      </div>`;
+    const currentHtml = root.innerHTML.replace(/<div id="info-banner"[^>]*>[\s\S]*?<\/div>/gi, '');
+    root.innerHTML = infoHtml + currentHtml;
+  }
+  
+  function log(m){ 
+    const timestamp = new Date().toLocaleTimeString();
+    state.logs.push(`[${timestamp}] ${String(m)}`);
+    const d = document.getElementById("cc-debug");
+    if(d) d.textContent = state.logs.slice(-50).join("\n");
+  }
+  
+  function status(msg){ 
+    show(`<div style="max-width:960px;margin:20px auto;padding:14px;border:1px solid #e5e7eb;border-radius:12px;background:#fff">${msg}</div>`); 
+  }
 
   // Collection mapping based on funding types
   const COLLECTION_MAP = {
@@ -77,51 +124,95 @@
     const interestsMain = profile.interestsMain || [];
     const interestsSub = profile.interestsSub || profile.grantsByInterest || [];
 
-    if (!fundingTypes.length) {
-      log("No funding types selected");
-      return [];
+    if (!fundingTypes || fundingTypes.length === 0) {
+      throw new Error("No funding types selected in your profile. Please complete your profile registration and select at least one funding type (Contracts, Grants, RFPs, or Bids).");
+    }
+
+    if ((!interestsMain || interestsMain.length === 0) && (!interestsSub || interestsSub.length === 0)) {
+      throw new Error("No interests selected in your profile. Please complete your profile registration and select at least one main interest category or sub-category.");
     }
 
     // Get collections to search
     const collectionsToSearch = new Set();
+    const invalidFundingTypes = [];
     fundingTypes.forEach(ft => {
-      const cols = COLLECTION_MAP[ft] || [];
-      cols.forEach(c => collectionsToSearch.add(c));
+      const cols = COLLECTION_MAP[ft];
+      if (!cols || cols.length === 0) {
+        invalidFundingTypes.push(ft);
+      } else {
+        cols.forEach(c => collectionsToSearch.add(c));
+      }
     });
+
+    if (collectionsToSearch.size === 0) {
+      throw new Error(`No valid collections found for selected funding types: ${fundingTypes.join(", ")}. Please check your profile settings.`);
+    }
+
+    if (invalidFundingTypes.length > 0) {
+      log(`Warning: Invalid funding types found: ${invalidFundingTypes.join(", ")}`);
+    }
 
     log(`Searching collections: ${Array.from(collectionsToSearch).join(", ")}`);
     log(`Matching keywords: ${interestsMain.length} main, ${interestsSub.length} sub`);
 
     const allOpportunities = [];
+    const errors = [];
     const promises = [];
 
     // Fetch from each collection
     for (const colName of collectionsToSearch) {
       promises.push(
         db.collection(colName).get().then(snap => {
+          if (!snap || snap.empty) {
+            log(`Collection '${colName}' is empty or does not exist`);
+            return;
+          }
+          const matchedCount = allOpportunities.filter(o => o.collection === colName).length;
           snap.docs.forEach(doc => {
-            const data = doc.data();
-            const score = calculateScore(data, interestsMain, interestsSub);
-            if (score > 0) {
-              allOpportunities.push({
-                id: doc.id,
-                collection: colName,
-                score: score,
-                ...data
-              });
+            try {
+              const data = doc.data();
+              if (!data) {
+                log(`Warning: Document ${doc.id} in ${colName} has no data`);
+                return;
+              }
+              const score = calculateScore(data, interestsMain, interestsSub);
+              if (score > 0) {
+                allOpportunities.push({
+                  id: doc.id,
+                  collection: colName,
+                  score: score,
+                  ...data
+                });
+              }
+            } catch (e) {
+              log(`Error processing document ${doc.id} in ${colName}: ${e.message}`);
             }
           });
-          log(`Found ${snap.docs.length} opportunities in ${colName}, ${allOpportunities.filter(o => o.collection === colName).length} matched`);
+          log(`Found ${snap.docs.length} opportunities in ${colName}, ${allOpportunities.filter(o => o.collection === colName && o.score > matchedCount).length} matched`);
         }).catch(e => {
-          log(`Error fetching ${colName}: ${e.message}`);
+          const errorMsg = `Failed to fetch from collection '${colName}': ${e.message || "Unknown error"}`;
+          errors.push(errorMsg);
+          log(errorMsg);
         })
       );
     }
 
     await Promise.all(promises);
 
+    if (errors.length > 0 && allOpportunities.length === 0) {
+      throw new Error(`Failed to fetch opportunities from all collections:\n${errors.join("\n")}\n\nPlease check:\n- Collection names exist in Firebase\n- You have read permissions\n- Your internet connection is stable`);
+    }
+
+    if (errors.length > 0) {
+      showInfo(`Some collections could not be accessed:\n${errors.join("\n")}\n\nShowing ${allOpportunities.length} opportunities from available collections.`, "warning");
+    }
+
     // Sort by score descending
     allOpportunities.sort((a, b) => b.score - a.score);
+
+    if (allOpportunities.length === 0) {
+      throw new Error(`No matching opportunities found.\n\nThis could mean:\n- No opportunities match your selected interests\n- Collections are empty\n- Try adjusting your interests in your profile\n\nSelected interests: ${[...interestsMain, ...interestsSub].slice(0, 5).join(", ")}${([...interestsMain, ...interestsSub].length > 5 ? "..." : "")}`);
+    }
 
     return allOpportunities;
   }
@@ -176,75 +267,121 @@
   // Action handlers
   window.handleApply = async function(index, oppId, collection) {
     const opp = state.items[index];
-    if (!opp) return;
+    if (!opp) {
+      showError("Opportunity not found. Please refresh the page and try again.");
+      return;
+    }
 
     try {
       const user = firebase.auth().currentUser;
-      if (!user) throw new Error("Please sign in");
+      if (!user) {
+        showError("You must be signed in to apply for opportunities.\n\nPlease sign in and try again.");
+        return;
+      }
       const db = firebase.firestore();
 
       // Check if application form exists
-      const applicationUrl = await findApplicationForm(opp);
+      let applicationUrl;
+      try {
+        applicationUrl = await findApplicationForm(opp);
+      } catch (e) {
+        log("Error finding application form: " + e.message);
+        applicationUrl = null;
+      }
 
       // Store in applied collection
-      await db.collection("profiles").doc(user.uid).collection("Applied").doc(oppId).set({
-        opportunityId: oppId,
-        collection: collection,
-        title: opp.title,
-        agency: opp.agency || opp.department,
-        url: opp.url || opp.synopsisUrl || opp.link,
-        appliedAt: firebase.firestore.FieldValue.serverTimestamp(),
-        applicationUrl: applicationUrl,
-        applicationInstructions: applicationUrl ? null : generateInstructions(opp),
-        ...opp
-      });
+      try {
+        await db.collection("profiles").doc(user.uid).collection("Applied").doc(oppId).set({
+          opportunityId: oppId,
+          collection: collection,
+          title: opp.title || "Untitled Opportunity",
+          agency: opp.agency || opp.department || "Unknown",
+          url: opp.url || opp.synopsisUrl || opp.link || "",
+          appliedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          applicationUrl: applicationUrl,
+          applicationInstructions: applicationUrl ? null : generateInstructions(opp),
+          ...opp
+        });
+      } catch (e) {
+        if (e.code === "permission-denied") {
+          throw new Error("Permission denied. You don't have write access to your profile data.\n\nPlease check your Firebase security rules.");
+        } else if (e.code === "unavailable") {
+          throw new Error("Firebase service is temporarily unavailable.\n\nPlease check your internet connection and try again.");
+        } else {
+          throw new Error(`Failed to save application: ${e.message || "Unknown error"}\n\nPlease try again or contact support if the issue persists.`);
+        }
+      }
 
       // Remove from current view
       state.items.splice(index, 1);
       state.shown = Math.min(state.shown, state.items.length);
       render(state.items, []);
 
+      // Show success message
+      showInfo(`Successfully applied to "${opp.title || "Opportunity"}"!\n\nYou can view all your applied opportunities in your dashboard.`, "success");
+
       // Show application modal or redirect
       if (applicationUrl) {
-        window.open(applicationUrl, '_blank');
+        setTimeout(() => {
+          window.open(applicationUrl, '_blank');
+        }, 500);
       } else {
-        showApplicationInstructions(opp, generateInstructions(opp));
+        setTimeout(() => {
+          showApplicationInstructions(opp, generateInstructions(opp));
+        }, 500);
       }
     } catch (e) {
       log("Apply error: " + e.message);
-      alert("Error applying: " + e.message);
+      showError("Failed to apply for this opportunity", e.message || e.toString());
     }
   };
 
   window.handleSave = async function(index, oppId, collection) {
     const opp = state.items[index];
-    if (!opp) return;
+    if (!opp) {
+      showError("Opportunity not found. Please refresh the page and try again.");
+      return;
+    }
 
     try {
       const user = firebase.auth().currentUser;
-      if (!user) throw new Error("Please sign in");
+      if (!user) {
+        showError("You must be signed in to save opportunities.\n\nPlease sign in and try again.");
+        return;
+      }
       const db = firebase.firestore();
 
       // Store in saved collection
-      await db.collection("profiles").doc(user.uid).collection("Saved").doc(oppId).set({
-        opportunityId: oppId,
-        collection: collection,
-        title: opp.title,
-        agency: opp.agency || opp.department,
-        url: opp.url || opp.synopsisUrl || opp.link,
-        savedAt: firebase.firestore.FieldValue.serverTimestamp(),
-        ...opp
-      });
+      try {
+        await db.collection("profiles").doc(user.uid).collection("Saved").doc(oppId).set({
+          opportunityId: oppId,
+          collection: collection,
+          title: opp.title || "Untitled Opportunity",
+          agency: opp.agency || opp.department || "Unknown",
+          url: opp.url || opp.synopsisUrl || opp.link || "",
+          savedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          ...opp
+        });
+      } catch (e) {
+        if (e.code === "permission-denied") {
+          throw new Error("Permission denied. You don't have write access to your profile data.\n\nPlease check your Firebase security rules.");
+        } else if (e.code === "unavailable") {
+          throw new Error("Firebase service is temporarily unavailable.\n\nPlease check your internet connection and try again.");
+        } else {
+          throw new Error(`Failed to save opportunity: ${e.message || "Unknown error"}\n\nPlease try again or contact support if the issue persists.`);
+        }
+      }
 
       // Remove from current view
       state.items.splice(index, 1);
       state.shown = Math.min(state.shown, state.items.length);
       render(state.items, []);
 
+      showInfo(`Successfully saved "${opp.title || "Opportunity"}" for later!\n\nYou can view all your saved opportunities in your dashboard.`, "success");
       log(`Saved opportunity: ${opp.title}`);
     } catch (e) {
       log("Save error: " + e.message);
-      alert("Error saving: " + e.message);
+      showError("Failed to save this opportunity", e.message || e.toString());
     }
   };
 
@@ -386,7 +523,10 @@
 
   // Main matching function
   async function runMatching(){
-    if (state.loading) return;
+    if (state.loading) {
+      showInfo("Matching is already in progress. Please wait...", "warning");
+      return;
+    }
     
     const btn = document.getElementById("runBtn");
     if (btn) {
@@ -395,18 +535,40 @@
     }
     state.loading = true;
 
+    // Clear previous errors
+    root.querySelectorAll("#error-banner, #info-banner").forEach(el => el.remove());
+
     try{
       const user = firebase.auth().currentUser;
-      if (!user) throw new Error("Please sign in.");
+      if (!user) {
+        throw new Error("You must be signed in to find matches.\n\nPlease sign in and try again.");
+      }
       const db = firebase.firestore();
 
       // Load user profile
-      const profSnap = await db.collection("profiles").doc(user.uid).get();
-      if (!profSnap.exists) {
-        throw new Error("Profile not found. Please complete registration first.");
+      let profSnap;
+      try {
+        profSnap = await db.collection("profiles").doc(user.uid).get();
+      } catch (e) {
+        if (e.code === "permission-denied") {
+          throw new Error("Permission denied. You don't have read access to your profile.\n\nPlease check your Firebase security rules or contact support.");
+        } else if (e.code === "unavailable") {
+          throw new Error("Firebase service is temporarily unavailable.\n\nPlease check your internet connection and try again.");
+        } else {
+          throw new Error(`Failed to load profile: ${e.message || "Unknown error"}`);
+        }
+      }
+
+      if (!profSnap || !profSnap.exists) {
+        throw new Error("Profile not found.\n\nPlease complete your registration first:\n1. Go to the registration page\n2. Fill out all required information\n3. Select your funding types and interests\n4. Return here to find matches");
       }
       
       state.profile = profSnap.data();
+      
+      if (!state.profile) {
+        throw new Error("Profile data is empty. Please complete your registration.");
+      }
+
       log("Profile loaded: " + JSON.stringify({
         fundingTypes: state.profile.fundingTypes,
         interestsMain: state.profile.interestsMain?.length || 0,
@@ -414,11 +576,26 @@
       }));
 
       // Match opportunities
-      const matched = await matchOpportunities(db, state.profile);
+      let matched;
+      try {
+        matched = await matchOpportunities(db, state.profile);
+      } catch (e) {
+        throw new Error(e.message || "Failed to match opportunities");
+      }
       
       // Filter out already applied/saved
-      const appliedSnap = await db.collection("profiles").doc(user.uid).collection("Applied").get();
-      const savedSnap = await db.collection("profiles").doc(user.uid).collection("Saved").get();
+      let appliedSnap, savedSnap;
+      try {
+        [appliedSnap, savedSnap] = await Promise.all([
+          db.collection("profiles").doc(user.uid).collection("Applied").get(),
+          db.collection("profiles").doc(user.uid).collection("Saved").get()
+        ]);
+      } catch (e) {
+        log(`Warning: Could not fetch applied/saved lists: ${e.message}`);
+        appliedSnap = { docs: [] };
+        savedSnap = { docs: [] };
+      }
+      
       const appliedIds = new Set(appliedSnap.docs.map(d => d.id));
       const savedIds = new Set(savedSnap.docs.map(d => d.id));
       
@@ -428,10 +605,18 @@
       state.shown = Math.min(state.pageSize, state.items.length);
       render(state.items, []);
       
+      if (filtered.length === 0 && matched.length > 0) {
+        showInfo(`All ${matched.length} matched opportunities have already been applied to or saved.\n\nTry adjusting your interests or check back later for new opportunities.`, "info");
+      } else if (filtered.length > 0) {
+        showInfo(`Found ${filtered.length} new matching opportunity${filtered.length !== 1 ? 'ies' : 'y'}!${matched.length !== filtered.length ? `\n\n(${matched.length - filtered.length} already applied/saved)` : ""}`, "success");
+      }
+      
       log(`Found ${filtered.length} new opportunities (${matched.length} total, ${appliedIds.size} applied, ${savedIds.size} saved)`);
     } catch (e) {
       log("Matching error: " + e.message);
-      render(state.items, [e.message]);
+      const errorMsg = e.message || "An unknown error occurred while finding matches";
+      showError("Failed to find matching opportunities", errorMsg);
+      render(state.items, []);
     } finally {
       state.loading = false;
       if (btn) {
@@ -470,11 +655,12 @@
           show(`
             <div style="max-width:420px;margin:40px auto;padding:20px;border:1px solid #e5e7eb;border-radius:14px;background:#fff;">
               <h3 style="margin:0 0 8px;">Sign in</h3>
-              <div id="err" style="display:none;margin-bottom:10px;color:#b91c1c;"></div>
-              <input id="email" type="email" placeholder="Email" autocomplete="email"
-                     style="width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:10px;margin-bottom:8px;">
-              <input id="password" type="password" placeholder="Password" autocomplete="current-password"
-                     style="width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:10px;margin-bottom:12px;">
+              <p style="margin:0 0 16px;color:#6b7280;font-size:0.9rem">Sign in to explore opportunities matched to your profile</p>
+              <div id="err" style="display:none;margin-bottom:12px;padding:12px;border:2px solid #dc2626;border-radius:8px;background:#fee2e2;color:#991b1b;line-height:1.6;"></div>
+              <input id="email" type="email" placeholder="Email" autocomplete="email" required
+                     style="width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:10px;margin-bottom:8px;box-sizing:border-box;">
+              <input id="password" type="password" placeholder="Password" autocomplete="current-password" required
+                     style="width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:10px;margin-bottom:12px;box-sizing:border-box;">
               <button id="loginBtn" style="width:100%;padding:12px;border:0;border-radius:12px;background:#685bc6;color:#fff;font-weight:600;cursor:pointer">
                 Log in
               </button>
@@ -482,12 +668,53 @@
           const lb = document.getElementById("loginBtn");
           lb.onclick = async ()=>{
             const err = document.getElementById("err");
+            const emailEl = document.getElementById("email");
+            const passEl = document.getElementById("password");
+            
             err.style.display="none";
+            
+            const email = emailEl.value.trim();
+            const pw = passEl.value;
+            
+            if (!email) {
+              err.textContent = "Please enter your email address";
+              err.style.display = "block";
+              return;
+            }
+            
+            if (!pw) {
+              err.textContent = "Please enter your password";
+              err.style.display = "block";
+              return;
+            }
+            
+            lb.disabled = true;
+            lb.textContent = "Signing in...";
+            
             try {
-              const email = document.getElementById("email").value.trim();
-              const pw = document.getElementById("password").value;
-              await auth.signInWithEmailAndPassword(email,pw);
-            } catch(e){ err.textContent=(e?.message||"Login failed").replace("Firebase:","").trim(); err.style.display="block"; log(err.textContent); }
+              await auth.signInWithEmailAndPassword(email, pw);
+            } catch(e){
+              let errorMsg = "Login failed";
+              if (e.code === "auth/user-not-found") {
+                errorMsg = "No account found with this email address.\n\nPlease check your email or sign up for a new account.";
+              } else if (e.code === "auth/wrong-password") {
+                errorMsg = "Incorrect password.\n\nPlease check your password and try again.";
+              } else if (e.code === "auth/invalid-email") {
+                errorMsg = "Invalid email address format.\n\nPlease enter a valid email address.";
+              } else if (e.code === "auth/too-many-requests") {
+                errorMsg = "Too many failed login attempts.\n\nPlease try again later or reset your password.";
+              } else if (e.code === "auth/network-request-failed") {
+                errorMsg = "Network error. Please check your internet connection and try again.";
+              } else {
+                errorMsg = (e?.message || "Login failed").replace("Firebase:","").replace("auth/", "").trim();
+              }
+              err.textContent = errorMsg;
+              err.style.display = "block";
+              log("Login error: " + errorMsg);
+            } finally {
+              lb.disabled = false;
+              lb.textContent = "Log in";
+            }
           };
           return;
         }
@@ -496,7 +723,8 @@
         render([], []);
       });
     }catch(e){
-      show(`<p style="color:#b91c1c">Firebase init error: ${e.message||e}</p>`);
+      const errorMsg = e.message || "Unknown error";
+      showError("Failed to initialize Firebase", `Error: ${errorMsg}\n\nPossible causes:\n- Firebase configuration is incorrect\n- Network connectivity issues\n- Scripts failed to load\n\nPlease refresh the page or contact support if the issue persists.`);
     }
   })();
 

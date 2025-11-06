@@ -15,6 +15,44 @@
     root.innerHTML = html;
   }
 
+  function showError(msg, details = null) {
+    const errorMsg = details ? `${msg}\n\nDetails: ${details}` : msg;
+    const errorHtml = `
+      <div id="error-banner" style="max-width:960px;margin:16px auto;padding:16px;border:2px solid #dc2626;border-radius:12px;background:#fee2e2;color:#991b1b;box-shadow:0 2px 4px rgba(0,0,0,0.1)">
+        <div style="display:flex;align-items:start;gap:12px">
+          <div style="font-size:1.5rem;line-height:1">⚠️</div>
+          <div style="flex:1">
+            <strong style="font-size:1.1rem;display:block;margin-bottom:6px">Error</strong>
+            <div style="line-height:1.6;white-space:pre-wrap">${errorMsg}</div>
+            <button onclick="document.getElementById('error-banner').style.display='none'" style="margin-top:12px;padding:6px 12px;border:1px solid #991b1b;border-radius:6px;background:#fff;color:#991b1b;cursor:pointer;font-weight:600">Dismiss</button>
+          </div>
+        </div>
+      </div>`;
+    const currentHtml = root.innerHTML.replace(/<div id="error-banner"[^>]*>[\s\S]*?<\/div>/gi, '');
+    root.innerHTML = errorHtml + currentHtml;
+  }
+
+  function showInfo(msg, type = "info") {
+    const colors = {
+      info: { bg: "#dbeafe", border: "#3b82f6", text: "#1e40af", icon: "ℹ️" },
+      success: { bg: "#d1fae5", border: "#10b981", text: "#065f46", icon: "✅" },
+      warning: { bg: "#fef3c7", border: "#f59e0b", text: "#92400e", icon: "⚠️" }
+    };
+    const c = colors[type] || colors.info;
+    const infoHtml = `
+      <div id="info-banner" style="max-width:960px;margin:16px auto;padding:16px;border:2px solid ${c.border};border-radius:12px;background:${c.bg};color:${c.text};box-shadow:0 2px 4px rgba(0,0,0,0.1)">
+        <div style="display:flex;align-items:start;gap:12px">
+          <div style="font-size:1.5rem;line-height:1">${c.icon}</div>
+          <div style="flex:1">
+            <div style="line-height:1.6;white-space:pre-wrap">${msg}</div>
+            <button onclick="document.getElementById('info-banner').style.display='none'" style="margin-top:12px;padding:6px 12px;border:1px solid ${c.border};border-radius:6px;background:#fff;color:${c.text};cursor:pointer;font-weight:600">Dismiss</button>
+          </div>
+        </div>
+      </div>`;
+    const currentHtml = root.innerHTML.replace(/<div id="info-banner"[^>]*>[\s\S]*?<\/div>/gi, '');
+    root.innerHTML = infoHtml + currentHtml;
+  }
+
   function status(msg){
     show(`<div style="max-width:960px;margin:20px auto;padding:14px;border:1px solid #e5e7eb;border-radius:12px;background:#fff">${msg}</div>`);
   }
@@ -104,16 +142,30 @@
     
     try {
       const user = firebase.auth().currentUser;
-      if (!user) throw new Error("Please sign in");
+      if (!user) {
+        showError("You must be signed in to remove opportunities.\n\nPlease sign in and try again.");
+        return;
+      }
       const db = firebase.firestore();
 
-      await db.collection("profiles").doc(user.uid).collection("Applied").doc(oppId).delete();
+      try {
+        await db.collection("profiles").doc(user.uid).collection("Applied").doc(oppId).delete();
+      } catch (e) {
+        if (e.code === "permission-denied") {
+          throw new Error("Permission denied. You don't have write access to your profile data.\n\nPlease check your Firebase security rules.");
+        } else if (e.code === "unavailable") {
+          throw new Error("Firebase service is temporarily unavailable.\n\nPlease check your internet connection and try again.");
+        } else {
+          throw new Error(`Failed to remove opportunity: ${e.message || "Unknown error"}\n\nPlease try again or contact support if the issue persists.`);
+        }
+      }
 
       state.items.splice(index, 1);
       state.shown = Math.min(state.shown, state.items.length);
       render(state.items);
+      showInfo("Opportunity removed from your applied list.", "success");
     } catch (e) {
-      alert("Error removing: " + e.message);
+      showError("Failed to remove opportunity", e.message || e.toString());
     }
   };
 
@@ -153,21 +205,49 @@
   async function loadApplied(){
     try {
       const user = firebase.auth().currentUser;
-      if (!user) throw new Error("Please sign in");
+      if (!user) {
+        throw new Error("You must be signed in to view applied opportunities.\n\nPlease sign in and try again.");
+      }
       const db = firebase.firestore();
 
-      const snap = await db.collection("profiles").doc(user.uid).collection("Applied")
-        .orderBy("appliedAt", "desc")
-        .limit(100)
-        .get();
+      let snap;
+      try {
+        snap = await db.collection("profiles").doc(user.uid).collection("Applied")
+          .orderBy("appliedAt", "desc")
+          .limit(100)
+          .get();
+      } catch (e) {
+        if (e.code === "permission-denied") {
+          throw new Error("Permission denied. You don't have read access to your profile data.\n\nPlease check your Firebase security rules or contact support.");
+        } else if (e.code === "unavailable") {
+          throw new Error("Firebase service is temporarily unavailable.\n\nPlease check your internet connection and try again.");
+        } else if (e.code === "failed-precondition") {
+          throw new Error("Firestore index required.\n\nPlease create an index for 'appliedAt' in the Applied collection, or contact support.");
+        } else {
+          throw new Error(`Failed to load applied opportunities: ${e.message || "Unknown error"}\n\nPlease try again or contact support if the issue persists.`);
+        }
+      }
 
-      state.items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      state.items = snap.docs.map(d => {
+        try {
+          return { id: d.id, ...d.data() };
+        } catch (e) {
+          console.error("Error parsing document:", d.id, e);
+          return null;
+        }
+      }).filter(Boolean);
+
       state.shown = Math.min(state.pageSize, state.items.length);
       render(state.items);
       state.loading = false;
+
+      if (state.items.length === 0) {
+        showInfo("You haven't applied to any opportunities yet.\n\nExplore opportunities to find ones that match your profile.", "info");
+      }
     } catch (e) {
-      status("Error loading applied opportunities: " + e.message);
+      showError("Failed to load applied opportunities", e.message || e.toString());
       state.loading = false;
+      render([]);
     }
   }
 
@@ -214,7 +294,24 @@
               const email = document.getElementById("email").value.trim();
               const pw = document.getElementById("password").value;
               await auth.signInWithEmailAndPassword(email,pw);
-            } catch(e){ err.textContent=(e?.message||"Login failed").replace("Firebase:","").trim(); err.style.display="block"; }
+            } catch(e){
+              let errorMsg = "Login failed";
+              if (e.code === "auth/user-not-found") {
+                errorMsg = "No account found with this email address.\n\nPlease check your email or sign up for a new account.";
+              } else if (e.code === "auth/wrong-password") {
+                errorMsg = "Incorrect password.\n\nPlease check your password and try again.";
+              } else if (e.code === "auth/invalid-email") {
+                errorMsg = "Invalid email address format.\n\nPlease enter a valid email address.";
+              } else if (e.code === "auth/too-many-requests") {
+                errorMsg = "Too many failed login attempts.\n\nPlease try again later or reset your password.";
+              } else if (e.code === "auth/network-request-failed") {
+                errorMsg = "Network error. Please check your internet connection and try again.";
+              } else {
+                errorMsg = (e?.message || "Login failed").replace("Firebase:","").replace("auth/", "").trim();
+              }
+              err.textContent = errorMsg;
+              err.style.display = "block";
+            }
           };
           return;
         }
@@ -223,7 +320,16 @@
         await loadApplied();
       });
     }catch(e){
-      show(`<p style="color:#b91c1c">Firebase init error: ${e.message||e}</p>`);
+      const errorMsg = e.message || "Unknown error";
+      show(`<div style="max-width:960px;margin:20px auto;padding:16px;border:2px solid #dc2626;border-radius:12px;background:#fee2e2;color:#991b1b">
+        <strong>Failed to initialize Firebase</strong><br>
+        Error: ${errorMsg}<br><br>
+        Possible causes:<br>
+        - Firebase configuration is incorrect<br>
+        - Network connectivity issues<br>
+        - Scripts failed to load<br><br>
+        Please refresh the page or contact support if the issue persists.
+      </div>`);
     }
   })();
 })();
