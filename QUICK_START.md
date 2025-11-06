@@ -1,103 +1,261 @@
-# 🚀 Quick Start Guide
+# Quick Start Guide - RFP Queen
 
-## Start the Server (3 Steps)
+## 🚀 Get Started in 5 Minutes
 
-### 1. Configure Firebase (One-time setup)
+### Step 1: Start the Server
+
 ```bash
-# Copy the example environment file
-cp .env.example .env
-
-# Edit .env and add your Firebase credentials path
-# You need to download the service account JSON from Firebase Console
-nano .env
-```
-
-### 2. Create Admin User (One-time setup)
-```bash
-python3 manage.py createsuperuser
-# Follow the prompts to create your admin account
-```
-
-### 3. Start the Server
-```bash
-# Option A: Use the startup script
-./start_server.sh
-
-# Option B: Run directly
+cd /workspace
 python3 manage.py runserver 0.0.0.0:8000
 ```
 
-## Access the Application
+### Step 2: Access the Application
 
-Open your browser and go to:
-- **Homepage**: http://localhost:8000/
-- **Explore Opportunities**: http://localhost:8000/explore
-- **Dashboard**: http://localhost:8000/dashboard
-- **Admin Panel**: http://localhost:8000/admin
+Open your browser to: **http://localhost:8000**
 
-## First Time Usage
+### Step 3: Sign In
 
-### 1. Login to Admin
-1. Go to http://localhost:8000/admin
-2. Login with superuser credentials
-3. Create a user account for testing
+Use your Firebase email/password credentials.
 
-### 2. Test the API
+If you don't have an account, create one in Firebase Console first.
+
+### Step 4: Sync Opportunities
+
+In a new terminal:
+
 ```bash
-# Get API health status
-curl http://localhost:8000/api/health/
-
-# Should return: {"status":"ok","message":"RFPueen API is running"}
+cd /workspace
+python3 manage.py sync_opportunities --limit 50
 ```
 
-### 3. Sync Opportunities from Firebase (Optional)
+This syncs 50 opportunities per collection from Firebase to Django.
+
+### Step 5: Find Matches
+
+1. Go to **http://localhost:8000/explore/**
+2. Click **"Find Matches"** button
+3. Review opportunity cards with win rates
+4. Click **Apply**, **Save**, or **Pass** on each card
+
+### Step 6: Track Applications
+
+- **Applied:** http://localhost:8000/applied/
+- **Saved:** http://localhost:8000/saved/
+- **Dashboard:** http://localhost:8000/
+
+## 🎯 What Each Feature Does
+
+### Dashboard (/)
+- Overview of your activity
+- Counts of applied and saved opportunities
+- Quick links to Explore, Applied, Saved
+
+### Explore (/explore/)
+- **Find Matches** button runs the matching algorithm
+- Shows opportunities ranked by relevance
+- **Win Rate %** indicates match quality
+- **Urgency badge** shows deadline status:
+  - 🔴 Urgent: ≤30 days
+  - 🟡 Soon: ≤3 months  
+  - ⚪ Ongoing: >3 months
+- **Three buttons** for each opportunity:
+  - **Apply** - Finds application form or shows instructions
+  - **Save** - Stores for later review
+  - **Pass** - Dismisses from list
+
+### Applied (/applied/)
+- List of all opportunities you've applied to
+- Shows application date and deadline
+- Links to application forms (if found)
+- Links to full opportunity details
+
+### Saved (/saved/)
+- Opportunities you saved for later
+- Can apply directly from this page
+- Shows when you saved each opportunity
+
+## 📊 Understanding Win Rates
+
+Win rates are calculated based on:
+
+- **40%** - How many of your keywords appear in the opportunity
+- **25%** - Match with your primary interests
+- **20%** - Funding type preference match
+- **10%** - Location match (same state)
+- **5%** - Deadline timing
+
+**Example:**
+- 90%+ = Excellent match, highly recommended
+- 70-89% = Good match, worth applying
+- 50-69% = Fair match, review carefully
+- <50% = Weak match, probably not a fit
+
+## 🔧 Common Commands
+
+### Sync all opportunities
 ```bash
-python3 manage.py sync_opportunities --limit 100
+python3 manage.py sync_opportunities
 ```
 
-### 4. Start Exploring
-1. Go to http://localhost:8000/explore
-2. Select funding types (Contracts, Grants, RFPs, Bids)
-3. Enter keywords (e.g., "technology, healthcare")
-4. Click "Find Matches"
-5. See opportunities with win rates!
-
-## Common Issues
-
-### Issue: Firebase connection error
-**Solution**: Make sure your `.env` file has the correct path to your Firebase credentials JSON file.
-
-### Issue: No opportunities showing up
-**Solution**: 
-1. Check that Firebase has data in the expected collections
-2. Try syncing: `python3 manage.py sync_opportunities`
-
-### Issue: Port 8000 already in use
-**Solution**: Use a different port:
+### Sync specific collections
 ```bash
-python3 manage.py runserver 0.0.0.0:8080
+python3 manage.py sync_opportunities --collections SAM grants.gov
 ```
 
-## Features to Try
+### Sync limited number (testing)
+```bash
+python3 manage.py sync_opportunities --limit 10
+```
 
-✅ **Smart Matching** - Algorithm ranks opportunities by relevance  
-✅ **Win Rate** - See why each opportunity is a good match  
-✅ **Apply/Save/Pass** - Manage opportunities with one click  
-✅ **Application Finder** - Auto-discovers application form URLs  
-✅ **Track Applications** - See all applied opportunities  
-✅ **Save for Later** - Bookmark interesting opportunities  
+### Access Django Admin
+1. Create superuser (first time only):
+   ```bash
+   python3 manage.py createsuperuser
+   ```
 
-## Getting Help
+2. Visit: http://localhost:8000/admin/
 
-- **Full Documentation**: See `README.md`
-- **Setup Guide**: See `SETUP_GUIDE.md`
-- **Project Summary**: See `PROJECT_SUMMARY.md`
+### Reset database (start fresh)
+```bash
+rm db.sqlite3
+python3 manage.py migrate
+python3 manage.py createsuperuser
+python3 manage.py sync_opportunities
+```
 
-## What's Next?
+## 🐛 Troubleshooting
 
-1. **Customize the UI**: Edit templates in `opportunities/templates/`
-2. **Adjust Matching**: Modify `opportunities/matching_algorithm.py`
-3. **Add Collections**: Update collection map for new data sources
-4. **Deploy**: Follow production deployment guide in README.md
+### "No matches found"
+- **Check:** User profile in Firebase has funding types and interests set
+- **Fix:** Add to Firebase: `fundingTypes`, `interestsMain`, `interestsSub`
+- **Verify:** Run sync_opportunities to ensure opportunities exist
 
-That's it! You're ready to match opportunities! 🎉
+### "Firebase connection error"
+- **Check:** `.env` file has correct Firebase credentials
+- **Fix:** Verify API key, auth domain, project ID
+
+### "Module not found" errors
+- **Fix:** Install requirements:
+  ```bash
+  pip3 install -r requirements.txt --break-system-packages
+  ```
+
+### Port 8000 already in use
+- **Fix:** Use different port:
+  ```bash
+  python3 manage.py runserver 0.0.0.0:8080
+  ```
+
+### No opportunities in database
+- **Check:** Run sync command first
+- **Verify:** Your scraping software has populated Firebase collections
+
+## 📁 Required Firebase Profile Structure
+
+Users MUST have this data in `profiles/{uid}`:
+
+```javascript
+{
+  organizationName: "Your Organization",
+  organizationType: "Nonprofit",  // or "Government", "Business", etc.
+  city: "Your City",
+  state: "Your State",
+  
+  // REQUIRED FOR MATCHING:
+  fundingTypes: [
+    "Grants",      // and/or
+    "Contracts",   // and/or
+    "RFPs",        // and/or
+    "Bids"
+  ],
+  
+  // REQUIRED FOR MATCHING:
+  interestsMain: [
+    "education",
+    "healthcare",
+    "technology"
+  ],
+  
+  // REQUIRED FOR MATCHING:
+  interestsSub: [
+    "rural communities",
+    "youth programs",
+    "research"
+  ]
+}
+```
+
+Without these fields, matching will return zero results!
+
+## 🎓 Example User Flow
+
+**Sarah's Story:**
+
+1. **Signs in** with her email (sarah@nonprofit.org)
+2. **Profile checked:** She has:
+   - Funding Types: ["Grants", "RFPs"]
+   - Main Interests: ["education", "community development"]
+   - Sub Interests: ["literacy", "after-school programs"]
+   - State: "California"
+
+3. **Clicks "Find Matches"**:
+   - System searches SAM, grants.gov, grantwatch, PND_RFPs, rfpmart
+   - Finds 47 opportunities with matching keywords
+   - Calculates win rates for each
+   - Shows top 20, sorted by relevance
+
+4. **Reviews first opportunity**:
+   - Title: "After-School Literacy Program Grant"
+   - Win Rate: 92%
+   - Urgency: Urgent (15 days left)
+   - Clicks **"Apply"**
+
+5. **System response**:
+   - Scrapes opportunity page
+   - Finds: grants.gov/apply/form-12345
+   - Opens application in new tab
+   - Moves opportunity to "Applied" list
+
+6. **Reviews second opportunity**:
+   - Win Rate: 65%
+   - Deadline: 3 months away
+   - Clicks **"Save for Later"**
+   - Moves to "Saved" list
+
+7. **Later that week**:
+   - Visits /saved/
+   - Reviews saved opportunity
+   - Clicks "Apply Now"
+   - Gets detailed instructions
+
+## 💡 Pro Tips
+
+1. **Be specific with interests** - "early childhood education" > "education"
+2. **Review win rates** - Focus on 70%+ matches
+3. **Act on urgent** - Red badges mean apply ASAP
+4. **Use save feature** - Don't lose good opportunities
+5. **Check applied tab** - Track your submissions
+6. **Sync regularly** - New opportunities added daily
+
+## 🚦 System Status Indicators
+
+On opportunity cards:
+
+- **Collection Badge** (gray) - Data source (SAM, grants.gov, etc.)
+- **Urgency Badge**:
+  - 🔴 RED = Apply now! (≤30 days)
+  - 🟡 YELLOW = Apply soon (≤3 months)
+  - ⚪ GRAY = No rush (ongoing)
+- **Win Rate Badge** (purple) - Match quality percentage
+
+## 📞 Need Help?
+
+1. Check README.md for full documentation
+2. Check DEPLOYMENT.md for setup details
+3. Check PROJECT_SUMMARY.md for technical details
+4. View Django admin for data inspection
+5. Check server logs for errors
+
+---
+
+**You're all set! Start finding and applying to opportunities! 🎉**

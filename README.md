@@ -1,344 +1,358 @@
-# RFPueen - Opportunity Matching Platform
+# RFP Queen - Fundraising Opportunity Matching Platform
 
-A Django-based platform for matching opportunities (Contracts, Grants, RFPs, Bids) to user profiles using intelligent algorithms, win rate calculations, and automated application form discovery.
+An intelligent fundraising opportunity matching platform that connects users with grants, contracts, RFPs, and bids using AI-powered algorithms.
 
 ## Features
 
-### 🎯 Smart Opportunity Matching
-- **Algorithm-based matching**: Matches opportunities from Firebase based on user's funding types and interests
-- **Keyword scoring**: Main interests get 3x weight, sub-interests get 1x weight
-- **Collection mapping**: Automatically searches relevant Firebase collections (SAM, grants.gov, PND_RFPs, etc.)
-
-### 📊 Win Rate Calculation with Reasoning
-- **Multi-factor analysis**: 
-  - Keyword match strength (40 points)
-  - Main keyword matches (30 points)
-  - Deadline urgency (15 points)
-  - Information completeness (15 points)
-- **Detailed reasoning**: Provides breakdown and assessment for each opportunity
-- **Percentage-based scoring**: Easy-to-understand 0-100% win rate
-
-### 🔍 Application Form Finder
-- **Web scraping**: Automatically discovers direct application form URLs
-- **Multiple strategies**: 
-  - Checks opportunity data for existing URLs
-  - Searches for form-related link text
-  - Identifies form-related URL patterns
-  - Finds form submission actions
-  - Detects embedded iframes with forms
-- **Caching**: Stores discovered form URLs to avoid repeated scraping
-- **Fallback instructions**: Generates helpful instructions when form URL not found
-
-### 💾 Opportunity Management
-- **Save for later**: Store interesting opportunities to review and apply later
-- **Track applications**: Keep all applied opportunities in one organized place
-- **Apply/Pass/Save buttons**: Intuitive card-based UI for quick actions
-- **Separate screens**: Dedicated views for applied and saved opportunities
-
-### ⚡ Urgency Tracking
-- **Urgent**: Deadlines ≤ 30 days
-- **Soon**: Deadlines between 31-92 days  
-- **Ongoing**: Deadlines > 92 days or no deadline
-- **Color-coded badges**: Visual indicators for quick identification
+✨ **Core Functionality:**
+- 🎯 **Intelligent Matching Algorithm** - Matches opportunities to user profiles based on keywords, funding types, location, and urgency
+- 📊 **Win Rate Calculation** - Calculates success probability (0-100%) with detailed reasoning
+- 🔍 **Application Form Discovery** - Automatically finds direct application URLs or provides detailed instructions
+- 💾 **Save for Later** - Save opportunities to review and apply later
+- 📝 **Application Tracking** - Track all applied opportunities in one place
+- 🔥 **Urgency Buckets** - Categorizes opportunities by deadline (urgent, soon, ongoing)
 
 ## Tech Stack
 
-- **Backend**: Django 5.2.8 + Django REST Framework
-- **Database**: SQLite (default) / PostgreSQL (recommended for production)
-- **Firebase**: Firebase Admin SDK for Firestore integration
-- **Web Scraping**: BeautifulSoup4 + Requests + Selenium
-- **Frontend**: Vanilla JavaScript + Modern CSS
-
-## Installation
-
-### Prerequisites
-- Python 3.12+
-- Firebase project with Firestore database
-- Firebase service account credentials
-
-### Setup Steps
-
-1. **Clone the repository**
-```bash
-git clone <your-repo-url>
-cd rfpueen
-```
-
-2. **Install dependencies**
-```bash
-pip install -r requirements.txt
-```
-
-3. **Configure environment variables**
-```bash
-cp .env.example .env
-# Edit .env and add your Firebase credentials
-```
-
-4. **Run database migrations**
-```bash
-python manage.py makemigrations
-python manage.py migrate
-```
-
-5. **Create a superuser**
-```bash
-python manage.py createsuperuser
-```
-
-6. **Run the development server**
-```bash
-python manage.py runserver
-```
-
-7. **Access the application**
-- Main site: http://localhost:8000/
-- API: http://localhost:8000/api/
-- Admin: http://localhost:8000/admin/
-
-## Firebase Setup
-
-### 1. Create Firebase Project
-1. Go to [Firebase Console](https://console.firebase.google.com/)
-2. Create a new project or use existing one
-3. Enable Firestore Database
-
-### 2. Get Service Account Credentials
-1. Go to Project Settings > Service Accounts
-2. Click "Generate New Private Key"
-3. Download the JSON file
-4. Update `FIREBASE_CREDENTIALS_PATH` in `.env` to point to this file
-
-### 3. Firestore Structure
-Your Firestore should have these collections for opportunity data:
-
-```
-/SAM (Contracts)
-/grants.gov (Grants)
-/grantwatch (Grants)
-/PND_RFPs (RFPs)
-/rfpmart (RFPs)
-/bid (Bids)
-
-/profiles/{userId}
-  /Applied/{opportunityId}
-  /Saved/{opportunityId}
-```
-
-Each opportunity document should have:
-```javascript
-{
-  "title": "Opportunity Title",
-  "description": "Full description",
-  "summary": "Brief summary",
-  "agency": "Agency Name",
-  "department": "Department Name",
-  "url": "https://opportunity-url.com",
-  "closeDate": "2025-12-31",
-  "openDate": "2025-01-01",
-  "place": "Location",
-  // ... other fields
-}
-```
-
-## API Endpoints
-
-### Opportunities
-- `POST /api/opportunities/match/` - Match opportunities to user profile
-- `GET /api/opportunities/{id}/find_application_form/` - Find application form URL
-
-### Applied Opportunities
-- `GET /api/applied/` - List all applied opportunities
-- `POST /api/applied/` - Mark opportunity as applied
-- `DELETE /api/applied/{id}/` - Remove from applied list
-
-### Saved Opportunities
-- `GET /api/saved/` - List all saved opportunities
-- `POST /api/saved/` - Save opportunity for later
-- `POST /api/saved/{id}/apply/` - Move saved to applied
-- `DELETE /api/saved/{id}/` - Remove from saved list
-
-### User Profile
-- `GET /api/profiles/me/` - Get current user's profile
-- `PUT /api/profiles/{id}/` - Update profile
-
-### Dashboard
-- `GET /api/dashboard/stats/` - Get dashboard statistics
-
-### Health Check
-- `GET /api/health/` - API health check
-
-## Usage
-
-### 1. Finding Opportunities
-
-**Via Web Interface:**
-1. Go to `/explore`
-2. Select funding types (Contracts, Grants, RFPs, Bids)
-3. Enter your main interests (comma-separated keywords)
-4. Enter sub-interests (optional)
-5. Click "Find Matches"
-
-**Via API:**
-```bash
-curl -X POST http://localhost:8000/api/opportunities/match/ \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Token YOUR_TOKEN" \
-  -d '{
-    "funding_types": ["Grants", "Contracts"],
-    "interests_main": ["technology", "education"],
-    "interests_sub": ["software", "training"],
-    "exclude_applied": true,
-    "exclude_saved": true,
-    "limit": 100
-  }'
-```
-
-### 2. Understanding Win Rate
-
-Each opportunity shows a win rate (0-100%) based on:
-- **Keyword Match (40%)**: How many times your keywords appear
-- **Main Keywords (30%)**: Number of main interests matched
-- **Urgency (15%)**: Deadline timing (sweet spot is "soon")
-- **Completeness (15%)**: How complete the opportunity information is
-
-Win rates are categorized as:
-- **80%+**: Excellent match - highly recommended
-- **60-79%**: Good match - worth pursuing
-- **40-59%**: Fair match - consider applying
-- **<40%**: Limited match - may not be ideal
-
-### 3. Application Form Finder
-
-The system automatically tries to find direct application form URLs by:
-1. Checking opportunity data for existing form URLs
-2. Scraping the opportunity page for form-related links
-3. Looking for form submission URLs
-4. Finding embedded forms in iframes
-
-If no form is found, it generates instructions with:
-- Main opportunity URL
-- Agency contact information
-- Email and phone (if available)
-- Deadline information
-
-### 4. Managing Applications
-
-**Save for Later:**
-- Click "Save for Later" on any opportunity card
-- View saved opportunities at `/dashboard-saved`
-- Apply when ready or remove from list
-
-**Track Applications:**
-- Click "Apply" to move to applied list
-- View all applications at `/dashboard-applied`
-- Access application forms directly
-- Remove applications as needed
-
-## Matching Algorithm Details
-
-### Collection Mapping
-```python
-COLLECTION_MAP = {
-    "Contracts": ["SAM"],
-    "Grants": ["grants.gov", "grantwatch"],
-    "RFPs": ["PND_RFPs", "rfpmart"],
-    "Bids": ["bid"]
-}
-```
-
-### Scoring System
-```python
-# Main keyword match: 3 points per occurrence
-# Sub keyword match: 1 point per occurrence
-# Total score = sum of all keyword matches
-
-# Example:
-# "technology" appears 5 times (main) = 15 points
-# "software" appears 3 times (sub) = 3 points
-# Total match score = 18 points
-```
-
-### Urgency Buckets
-```python
-days_until_deadline <= 30: "urgent"
-days_until_deadline <= 92: "soon"
-days_until_deadline > 92: "ongoing"
-no deadline: "ongoing"
-```
-
-## Deployment
-
-### Development
-```bash
-python manage.py runserver
-```
-
-### Production with Gunicorn
-```bash
-gunicorn rfpueen_project.wsgi:application --bind 0.0.0.0:8000
-```
-
-### Environment Variables for Production
-```bash
-DEBUG=False
-ALLOWED_HOSTS=yourdomain.com
-SECRET_KEY=your-production-secret-key
-DATABASE_URL=postgresql://...
-FIREBASE_CREDENTIALS_PATH=/path/to/credentials.json
-```
-
-### Static Files
-```bash
-python manage.py collectstatic
-```
+- **Backend:** Django 5+ with Django REST Framework
+- **Frontend:** HTML/JavaScript with Firebase Authentication
+- **Database:** SQLite (development) / PostgreSQL (production recommended)
+- **Real-time Data:** Firebase Firestore for opportunity storage
+- **Authentication:** Firebase Auth
 
 ## Project Structure
 
 ```
-rfpueen/
-├── manage.py
-├── requirements.txt
-├── README.md
-├── rfpueen_project/
-│   ├── settings.py
-│   ├── urls.py
-│   └── wsgi.py
-└── opportunities/
-    ├── models.py              # Database models
-    ├── views.py               # API views
-    ├── serializers.py         # REST serializers
-    ├── urls.py                # URL routing
-    ├── matching_algorithm.py  # Matching logic
-    ├── form_scraper.py        # Web scraping
-    ├── firebase_service.py    # Firebase integration
-    └── templates/             # HTML templates
-        ├── base.html
-        ├── index.html
-        ├── explore.html
-        ├── dashboard.html
-        ├── dashboard_applied.html
-        └── dashboard_saved.html
+/workspace/
+├── rfpqueen/              # Django project settings
+│   ├── settings.py        # Project configuration
+│   ├── urls.py           # Main URL routing
+│   └── wsgi.py           # WSGI application
+├── opportunities/         # Main Django app
+│   ├── models.py         # Database models
+│   ├── views.py          # API endpoints and HTML views
+│   ├── urls.py           # App URL routing
+│   ├── admin.py          # Django admin configuration
+│   ├── matching.py       # Intelligent matching algorithm
+│   ├── firebase_integration.py  # Firebase sync service
+│   ├── app_scraper.py    # Application form finder
+│   ├── templates/        # HTML templates
+│   │   └── opportunities/
+│   │       ├── base.html
+│   │       ├── index.html      # Dashboard
+│   │       ├── explore.html    # Opportunity cards
+│   │       ├── applied.html    # Applied opportunities
+│   │       └── saved.html      # Saved opportunities
+│   └── management/
+│       └── commands/
+│           └── sync_opportunities.py  # Sync command
+├── accounts/             # User authentication app
+├── manage.py            # Django management script
+├── requirements.txt     # Python dependencies
+├── .env                 # Environment variables (not in git)
+└── README.md           # This file
+```
+
+## Installation
+
+### Prerequisites
+
+- Python 3.12+
+- pip package manager
+- Firebase project with Firestore enabled
+- (Optional) Firebase Admin SDK service account key
+
+### Step 1: Clone and Setup
+
+```bash
+cd /workspace
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Or with system packages
+pip install --break-system-packages -r requirements.txt
+```
+
+### Step 2: Configure Environment Variables
+
+The `.env` file is already configured with Firebase credentials:
+
+```env
+# Firebase Configuration
+FIREBASE_API_KEY=AIzaSyDbkrUWV13zBvl4L2lu5Qw5aLYbC9LCjJk
+FIREBASE_AUTH_DOMAIN=therfpqueen.firebaseapp.com
+FIREBASE_PROJECT_ID=therfpqueen-f11fd
+
+# Django Settings
+SECRET_KEY=django-insecure-rfpqueen-development-key-change-in-production
+DEBUG=True
+ALLOWED_HOSTS=localhost,127.0.0.1,*
+
+# Optional: Firebase Admin SDK (for server-side operations)
+# FIREBASE_SERVICE_ACCOUNT_PATH=path/to/serviceAccountKey.json
+```
+
+**For Production:** Change `SECRET_KEY`, set `DEBUG=False`, and configure `ALLOWED_HOSTS` appropriately.
+
+### Step 3: Initialize Database
+
+```bash
+# Run migrations to create database tables
+python manage.py migrate
+
+# Create a superuser for Django admin
+python manage.py createsuperuser
+```
+
+### Step 4: Sync Opportunities from Firebase
+
+Your existing scraping software populates Firebase with opportunities. Sync them to Django:
+
+```bash
+# Sync all opportunities from all collections
+python manage.py sync_opportunities
+
+# Sync specific collections
+python manage.py sync_opportunities --collections SAM grants.gov
+
+# Limit opportunities per collection (for testing)
+python manage.py sync_opportunities --limit 100
+```
+
+### Step 5: Run Development Server
+
+```bash
+python manage.py runserver 0.0.0.0:8000
+```
+
+Visit: `http://localhost:8000`
+
+## API Endpoints
+
+### Authentication
+- `POST /api/auth/verify/` - Verify Firebase token and sync user profile
+
+### Opportunities
+- `POST /api/match/` - Run matching algorithm for user
+- `POST /api/apply/` - Apply to an opportunity
+- `POST /api/save/` - Save opportunity for later
+- `POST /api/pass/` - Dismiss an opportunity
+- `GET /api/applications/` - Get user's applied opportunities
+- `GET /api/saved/` - Get user's saved opportunities
+
+### Example API Usage
+
+```javascript
+// Verify Firebase user with Django backend
+const token = await firebase.auth().currentUser.getIdToken();
+const response = await fetch('/api/auth/verify/', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ idToken: token })
+});
+const data = await response.json();
+
+// Run matching algorithm
+const matchResponse = await fetch('/api/match/', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ 
+        firebase_uid: data.user.firebase_uid 
+    })
+});
+const matches = await matchResponse.json();
+```
+
+## Matching Algorithm
+
+The matching algorithm evaluates opportunities based on 5 key factors:
+
+### 1. Keyword Match (40 points)
+- Main keywords: 3x weight
+- Sub keywords: 1x weight
+- Matches in title, description, summary, agency
+
+### 2. Primary Interest Alignment (25 points)
+- Number of main interest matches
+- Up to 25 points (8 per match)
+
+### 3. Funding Type Match (20 points)
+- Matches user's preferred funding types
+- Collections mapped to funding types:
+  - Contracts → SAM
+  - Grants → grants.gov, grantwatch
+  - RFPs → PND_RFPs, rfpmart
+  - Bids → bid
+
+### 4. Location Match (10 points)
+- Same state as user profile
+
+### 5. Timing/Urgency (5 points)
+- Urgent (≤30 days): 5 points
+- Soon (≤3 months): 3 points
+- Ongoing: 2 points
+
+**Win Rate = (Total Score / 100) × 100%**
+
+## Application Form Discovery
+
+The system attempts to find direct application URLs through:
+
+1. **Direct URL fields** in opportunity data (applicationUrl, applyUrl, etc.)
+2. **URL pattern matching** in descriptions
+3. **Web scraping** of opportunity pages for application links
+4. **Keyword scoring** of discovered links
+
+When no direct URL is found, generates detailed application instructions including:
+- Main opportunity URL
+- Agency contact information
+- Email and phone contacts
+- Application deadline
+
+## User Profile Fields
+
+Users must complete Firebase profile with:
+
+```javascript
+{
+  organizationName: "string",
+  organizationType: "string",
+  city: "string",
+  state: "string",
+  fundingTypes: ["Grants", "Contracts", "RFPs", "Bids"],
+  interestsMain: ["keyword1", "keyword2"],  // Primary interests
+  interestsSub: ["keyword3", "keyword4"]    // Secondary interests
+}
+```
+
+## Django Admin
+
+Access the admin interface at `/admin/` to:
+- View and manage opportunities
+- Monitor user profiles
+- Track applications and saved opportunities
+- Review match statistics
+- Manage application pathways
+
+## Development Tips
+
+### Running Tests
+```bash
+python manage.py test opportunities
+```
+
+### Database Shell
+```bash
+python manage.py shell
+```
+
+### Clear Database (Reset)
+```bash
+rm db.sqlite3
+python manage.py migrate
+python manage.py createsuperuser
+```
+
+### View Logs
+```python
+import logging
+logger = logging.getLogger(__name__)
+logger.info("Your log message")
+```
+
+## Production Deployment
+
+### Using Gunicorn
+
+```bash
+# Install gunicorn (already in requirements.txt)
+pip install gunicorn
+
+# Run production server
+gunicorn rfpqueen.wsgi:application --bind 0.0.0.0:8000
+```
+
+### Environment Configuration
+
+1. Set `DEBUG=False` in production
+2. Configure proper `ALLOWED_HOSTS`
+3. Use PostgreSQL instead of SQLite
+4. Set up static file serving (whitenoise or nginx)
+5. Configure Firebase Admin SDK with service account
+6. Enable HTTPS
+7. Set strong `SECRET_KEY`
+
+### Database Migration to PostgreSQL
+
+```python
+# settings.py
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'rfpqueen_db',
+        'USER': 'your_user',
+        'PASSWORD': 'your_password',
+        'HOST': 'localhost',
+        'PORT': '5432',
+    }
+}
+```
+
+## Monitoring & Maintenance
+
+### Periodic Tasks (Setup with cron or Celery)
+
+1. **Sync Opportunities** - Run daily
+   ```bash
+   python manage.py sync_opportunities
+   ```
+
+2. **Update Match Scores** - Run when new opportunities added
+   ```python
+   from opportunities.models import UserProfile
+   from opportunities.matching import OpportunityMatcher
+   
+   for profile in UserProfile.objects.all():
+       matcher = OpportunityMatcher(profile)
+       matcher.match_opportunities()
+   ```
+
+3. **Clean Old Opportunities** - Remove expired opportunities
+   ```python
+   from datetime import datetime, timedelta
+   from opportunities.models import Opportunity
+   
+   cutoff = datetime.now().date() - timedelta(days=90)
+   Opportunity.objects.filter(close_date__lt=cutoff).delete()
+   ```
+
+## Troubleshooting
+
+### Firebase Connection Issues
+- Verify Firebase credentials in `.env`
+- Check if Firebase Admin SDK is initialized
+- Ensure Firestore database is accessible
+
+### Matching Returns No Results
+- Verify user profile has funding types selected
+- Check that keywords are set in interests
+- Run sync_opportunities to ensure opportunities exist
+- Verify collection names match COLLECTION_MAP in matching.py
+
+### Static Files Not Loading
+```bash
+python manage.py collectstatic
 ```
 
 ## Contributing
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+This is a custom project for fundraising opportunity matching. For contributions or issues, contact the development team.
 
 ## License
 
-This project is licensed under the MIT License.
+Proprietary - All rights reserved
 
 ## Support
 
-For issues, questions, or contributions, please visit the GitHub repository.
-
-## Acknowledgments
-
-- Firebase for the NoSQL database
-- Django and Django REST Framework for the backend
-- BeautifulSoup4 for web scraping capabilities
+For questions or issues, please contact the project maintainers.

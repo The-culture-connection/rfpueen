@@ -1,0 +1,152 @@
+{% extends "opportunities/base.html" %}
+
+{% block title %}Dashboard - RFP Queen{% endblock %}
+
+{% block content %}
+<div id="dashboard-root" style="min-height:160px;"></div>
+
+<script>
+(function(){
+  const root = document.getElementById("dashboard-root");
+  const state = { 
+    email: "",
+    appliedCount: 0,
+    savedCount: 0,
+    loading: true
+  };
+
+  function show(html){
+    root.innerHTML = html;
+  }
+
+  function status(msg){
+    show(`<div class="container"><div style="padding:14px;border:1px solid #e5e7eb;border-radius:12px;background:#fff">${msg}</div></div>`);
+  }
+
+  function render(){
+    const bar = `
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;padding:12px 0;margin-bottom:20px">
+        <div style="color:#6b7280">
+          <strong>Dashboard</strong> • Signed in as ${state.email||""}
+        </div>
+        <div style="display:flex;gap:8px">
+          <a href="/explore/" style="padding:8px 12px;border:1px solid #e5e7eb;border-radius:10px;background:#685bc6;color:#fff;text-decoration:none;font-weight:600">Explore</a>
+          <button id="signoutBtn" style="padding:8px 12px;border:1px solid #e5e7eb;border-radius:10px;background:#fff;cursor:pointer">Sign out</button>
+        </div>
+      </div>`;
+    
+    const cards = `
+      <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(280px, 1fr));gap:20px">
+        <a href="/explore/" style="text-decoration:none;color:inherit">
+          <div style="border:1px solid #e5e7eb;border-radius:14px;padding:24px;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,0.1);cursor:pointer;transition:transform 0.2s" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
+            <div style="font-size:2rem;margin-bottom:8px">🔍</div>
+            <h3 style="margin:0 0 8px;color:#111827">Explore Opportunities</h3>
+            <p style="margin:0;color:#6b7280;font-size:0.9rem">Find new opportunities matched to your profile</p>
+          </div>
+        </a>
+        <a href="/applied/" style="text-decoration:none;color:inherit">
+          <div style="border:1px solid #e5e7eb;border-radius:14px;padding:24px;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,0.1);cursor:pointer;transition:transform 0.2s" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
+            <div style="font-size:2rem;margin-bottom:8px">📝</div>
+            <h3 style="margin:0 0 8px;color:#111827">Applied Opportunities</h3>
+            <p style="margin:0;color:#6b7280;font-size:0.9rem">${state.appliedCount} opportunity${state.appliedCount !== 1 ? 'ies' : 'y'} you've applied to</p>
+          </div>
+        </a>
+        <a href="/saved/" style="text-decoration:none;color:inherit">
+          <div style="border:1px solid #e5e7eb;border-radius:14px;padding:24px;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,0.1);cursor:pointer;transition:transform 0.2s" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
+            <div style="font-size:2rem;margin-bottom:8px">💾</div>
+            <h3 style="margin:0 0 8px;color:#111827">Saved Opportunities</h3>
+            <p style="margin:0;color:#6b7280;font-size:0.9rem">${state.savedCount} opportunity${state.savedCount !== 1 ? 'ies' : 'y'} saved for later</p>
+          </div>
+        </a>
+      </div>`;
+    
+    show(`<div class="container">${bar}${cards}</div>`);
+
+    const so = document.getElementById("signoutBtn");
+    if (so) so.onclick = async ()=>{ 
+      try{ 
+        await auth.signOut(); 
+        location.reload(); 
+      }catch(e){ 
+        console.error(e); 
+      } 
+    };
+  }
+
+  async function loadCounts(){
+    try {
+      const appliedData = await window.api.call('/api/applications/', 'GET', { 
+        firebase_uid: window.appState.firebaseUid 
+      });
+      
+      const savedData = await window.api.call('/api/saved/', 'GET', { 
+        firebase_uid: window.appState.firebaseUid 
+      });
+
+      state.appliedCount = appliedData.applications ? appliedData.applications.length : 0;
+      state.savedCount = savedData.saved ? savedData.saved.length : 0;
+      render();
+    } catch (e) {
+      console.error("Error loading counts:", e);
+      render();
+    }
+  }
+
+  // Boot
+  (async function boot(){
+    status("Loading...");
+
+    auth.onAuthStateChanged(async (user)=>{
+      if(!user){
+        show(`
+          <div class="container">
+            <div style="max-width:420px;margin:40px auto;padding:20px;border:1px solid #e5e7eb;border-radius:14px;background:#fff;">
+              <h3 style="margin:0 0 8px;">Sign in</h3>
+              <div id="err" style="display:none;margin-bottom:10px;color:#b91c1c;"></div>
+              <input id="email" type="email" placeholder="Email" autocomplete="email"
+                     style="width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:10px;margin-bottom:8px;">
+              <input id="password" type="password" placeholder="Password" autocomplete="current-password"
+                     style="width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:10px;margin-bottom:12px;">
+              <button id="loginBtn" style="width:100%;padding:12px;border:0;border-radius:12px;background:#685bc6;color:#fff;font-weight:600;cursor:pointer">
+                Log in
+              </button>
+              <p style="margin-top:12px;text-align:center;color:#6b7280;font-size:0.9rem">
+                Don't have an account? Sign up with Firebase Auth first.
+              </p>
+            </div>
+          </div>`);
+        const lb = document.getElementById("loginBtn");
+        lb.onclick = async ()=>{
+          const err = document.getElementById("err");
+          err.style.display="none";
+          try {
+            const email = document.getElementById("email").value.trim();
+            const pw = document.getElementById("password").value;
+            await auth.signInWithEmailAndPassword(email,pw);
+          } catch(e){ 
+            err.textContent=(e?.message||"Login failed").replace("Firebase:","").trim(); 
+            err.style.display="block"; 
+          }
+        };
+        return;
+      }
+
+      state.email = user.email || "";
+      window.appState.user = user;
+      window.appState.firebaseUid = user.uid;
+      
+      // Verify with Django backend
+      try {
+        const token = await user.getIdToken();
+        const result = await window.api.call('/api/auth/verify/', 'POST', { idToken: token });
+        window.appState.profile = result.profile;
+      } catch (e) {
+        console.error("Backend auth error:", e);
+      }
+      
+      await loadCounts();
+    });
+  })();
+})();
+</script>
+{% endblock %}

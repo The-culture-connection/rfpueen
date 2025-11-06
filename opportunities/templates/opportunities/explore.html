@@ -1,0 +1,242 @@
+{% extends "opportunities/base.html" %}
+
+{% block title %}Explore Opportunities - RFP Queen{% endblock %}
+
+{% block content %}
+<div id="explore-root"></div>
+
+<script>
+(function(){
+  const root = document.getElementById("explore-root");
+  const state = { 
+    items: [], 
+    shown: 0, 
+    pageSize: 20, 
+    email: "",
+    loading: false
+  };
+
+  function show(html){
+    root.innerHTML = html;
+  }
+
+  function status(msg){
+    show(`<div class="container"><div style="padding:14px;border:1px solid #e5e7eb;border-radius:12px;background:#fff">${msg}</div></div>`);
+  }
+
+  function bucketOf(deadline){
+    if(!deadline) return "ongoing";
+    const d = new Date(deadline);
+    if(isNaN(+d)) return "ongoing";
+    const days = Math.ceil((d - new Date())/86400000);
+    if (days <= 30) return "urgent";
+    if (days <= 92) return "soon";
+    return "ongoing";
+  }
+
+  function card(o, index){
+    const urgency = bucketOf(o.close_date || o.deadline);
+    const urgencyColor = urgency === "urgent" ? "#dc2626" : urgency === "soon" ? "#f59e0b" : "#6b7280";
+    const winRate = Math.round(o.win_rate || 0);
+    
+    return `
+      <div id="opp-${index}" style="border:1px solid #e5e7eb;border-radius:14px;padding:20px;margin:12px 0;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
+          <span style="font-size:.75rem;padding:4px 8px;border:1px solid #e5e7eb;border-radius:8px;background:#f9fafb;text-transform:uppercase">${o.collection||"match"}</span>
+          <span style="font-size:.75rem;padding:4px 8px;border:1px solid ${urgencyColor};border-radius:8px;background:${urgency === "urgent" ? "#fee2e2" : urgency === "soon" ? "#fef3c7" : "#f9fafb"};color:${urgencyColor};font-weight:600">${urgency}</span>
+          <span style="font-size:.75rem;padding:4px 8px;border:1px solid #685bc6;border-radius:8px;background:#f3f4f6;color:#685bc6">Win Rate: ${winRate}%</span>
+        </div>
+        <div style="font-weight:600;font-size:1.25rem;margin-bottom:6px;color:#111827">${o.title||"Untitled Opportunity"}</div>
+        <div style="color:#6b7280;margin-bottom:8px;font-weight:500">${o.agency||o.department||"Unknown Agency"}</div>
+        <div style="color:#374151;font-size:0.9rem;line-height:1.6;margin-bottom:12px">
+          ${o.description ? (o.description.length > 200 ? o.description.substring(0, 200) + "..." : o.description) : (o.summary || "")}
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(150px, 1fr));gap:8px;margin-bottom:12px;font-size:0.85rem;color:#6b7280">
+          <div><strong>Posted:</strong> ${o.posted_date ? new Date(o.posted_date).toLocaleDateString() : "—"}</div>
+          <div><strong>Deadline:</strong> ${o.close_date ? new Date(o.close_date).toLocaleDateString() : "—"}</div>
+          <div><strong>Location:</strong> ${o.place || [o.city, o.state].filter(Boolean).join(", ") || "—"}</div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+          <button onclick="handleApply(${index})" style="padding:10px 16px;border:0;border-radius:10px;background:#685bc6;color:#fff;font-weight:600;cursor:pointer;flex:1;min-width:100px">
+            Apply
+          </button>
+          <button onclick="handleSave(${index})" style="padding:10px 16px;border:1px solid #e5e7eb;border-radius:10px;background:#fff;color:#111827;font-weight:600;cursor:pointer;flex:1;min-width:100px">
+            Save for Later
+          </button>
+          <button onclick="handlePass(${index})" style="padding:10px 16px;border:1px solid #e5e7eb;border-radius:10px;background:#fff;color:#6b7280;font-weight:600;cursor:pointer;flex:1;min-width:100px">
+            Pass
+          </button>
+        </div>
+        ${o.url ? `<div style="margin-top:10px"><a href="${o.url}" target="_blank" rel="noopener" style="color:#685bc6;text-decoration:none;font-size:0.9rem;font-weight:500">View full details →</a></div>` : ""}
+      </div>`;
+  }
+
+  window.handleApply = async function(index) {
+    const opp = state.items[index];
+    if (!opp) return;
+
+    try {
+      const result = await window.api.call('/api/apply/', 'POST', {
+        firebase_uid: window.appState.firebaseUid,
+        opportunity_id: opp.id
+      });
+
+      state.items.splice(index, 1);
+      state.shown = Math.min(state.shown, state.items.length);
+      render(state.items, []);
+
+      if (result.application_url) {
+        window.open(result.application_url, '_blank');
+      } else if (result.instructions) {
+        showInstructions(opp, result.instructions);
+      }
+    } catch (e) {
+      alert("Error applying: " + e.message);
+    }
+  };
+
+  window.handleSave = async function(index) {
+    const opp = state.items[index];
+    if (!opp) return;
+
+    try {
+      await window.api.call('/api/save/', 'POST', {
+        firebase_uid: window.appState.firebaseUid,
+        opportunity_id: opp.id
+      });
+
+      state.items.splice(index, 1);
+      state.shown = Math.min(state.shown, state.items.length);
+      render(state.items, []);
+    } catch (e) {
+      alert("Error saving: " + e.message);
+    }
+  };
+
+  window.handlePass = async function(index) {
+    const opp = state.items[index];
+    if (!opp) return;
+
+    try {
+      await window.api.call('/api/pass/', 'POST', {
+        firebase_uid: window.appState.firebaseUid,
+        opportunity_id: opp.id
+      });
+
+      state.items.splice(index, 1);
+      state.shown = Math.min(state.shown, state.items.length);
+      render(state.items, []);
+    } catch (e) {
+      alert("Error: " + e.message);
+    }
+  };
+
+  function showInstructions(opp, instructions) {
+    const modal = `
+      <div id="app-modal" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px">
+        <div style="background:#fff;border-radius:14px;padding:24px;max-width:600px;width:100%;max-height:80vh;overflow:auto">
+          <h2 style="margin:0 0 12px">Application Instructions</h2>
+          <h3 style="margin:0 0 8px;font-size:1.1rem">${opp.title || "Opportunity"}</h3>
+          <div style="white-space:pre-line;line-height:1.6;color:#374151;margin-bottom:16px;padding:12px;background:#f9fafb;border-radius:8px">${instructions}</div>
+          ${opp.url ? `<div style="margin-bottom:16px"><a href="${opp.url}" target="_blank" style="color:#685bc6;text-decoration:none;font-weight:600">View Opportunity Page →</a></div>` : ""}
+          <button onclick="document.getElementById('app-modal').remove()" 
+                  style="padding:10px 20px;border:0;border-radius:10px;background:#111827;color:#fff;font-weight:600;cursor:pointer;width:100%">
+            Close
+          </button>
+        </div>
+      </div>`;
+    document.body.insertAdjacentHTML('beforeend', modal);
+  }
+
+  function render(items, errors){
+    const bar = `
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;padding:12px 0;margin-bottom:20px">
+        <div style="color:#6b7280">Signed in as <strong>${state.email||""}</strong></div>
+        <div style="display:flex;gap:8px">
+          <button id="runBtn" style="padding:8px 12px;border:1px solid #e5e7eb;border-radius:10px;background:#111827;color:#fff;cursor:pointer;font-weight:600" ${state.loading ? "disabled" : ""}>
+            ${state.loading ? "Finding Matches..." : "Find Matches"}
+          </button>
+          <a href="/" style="padding:8px 12px;border:1px solid #e5e7eb;border-radius:10px;background:#fff;color:#111827;text-decoration:none">Dashboard</a>
+          <button id="signoutBtn" style="padding:8px 12px;border:1px solid #e5e7eb;border-radius:10px;background:#fff;cursor:pointer">Sign out</button>
+        </div>
+      </div>`;
+    
+    const errHtml = (errors && errors.length)
+      ? `<div style="padding:12px;border:1px solid #fecaca;background:#fef2f2;color:#991b1b;border-radius:10px;margin-bottom:16px">
+           <strong>Error:</strong> ${errors.map(e=>String(e)).join("<br>")}
+         </div>` : "";
+    
+    const haveMore = state.shown < items.length;
+    const list = items.slice(0, state.shown).map((o, i) => card(o, i)).join("") || 
+      "<p style='text-align:center;color:#6b7280;padding:40px'>No matches yet. Click <strong>Find Matches</strong> to discover opportunities.</p>";
+    
+    show(`<div class="container">
+      ${bar}
+      ${errHtml}
+      ${items.length > 0 ? `<div style="margin:16px 0;color:#6b7280;font-size:0.9rem">Showing ${state.shown} of ${items.length} matches</div>` : ""}
+      ${list}
+      ${haveMore ? `<div style="text-align:center;margin:20px 0 30px;">
+        <button id="cc-load-more" style="padding:12px 20px;border:1px solid #d1d5db;border-radius:10px;background:#fff;cursor:pointer;font-weight:600">Load more</button>
+      </div>` : ""}
+    </div>`);
+
+    const so = document.getElementById("signoutBtn");
+    if (so) so.onclick = async ()=>{ try{ await auth.signOut(); location.reload(); }catch(e){ console.error(e); } };
+
+    const lm = document.getElementById("cc-load-more");
+    if (lm) lm.onclick = ()=>{ state.shown = Math.min(items.length, state.shown + state.pageSize); render(state.items, []); };
+
+    const run = document.getElementById("runBtn");
+    if (run) run.onclick = runMatching;
+  }
+
+  async function runMatching(){
+    if (state.loading) return;
+    
+    state.loading = true;
+    render(state.items, []);
+
+    try{
+      const result = await window.api.call('/api/match/', 'POST', {
+        firebase_uid: window.appState.firebaseUid
+      });
+
+      state.items = result.matches || [];
+      state.shown = Math.min(state.pageSize, state.items.length);
+      render(state.items, []);
+      
+    } catch (e) {
+      render(state.items, [e.message]);
+    } finally {
+      state.loading = false;
+    }
+  }
+
+  // Boot
+  (async function boot(){
+    status("Loading...");
+
+    auth.onAuthStateChanged(async (user)=>{
+      if(!user){
+        location.href = '/';
+        return;
+      }
+
+      state.email = user.email || "";
+      window.appState.user = user;
+      window.appState.firebaseUid = user.uid;
+      
+      try {
+        const token = await user.getIdToken();
+        const result = await window.api.call('/api/auth/verify/', 'POST', { idToken: token });
+        window.appState.profile = result.profile;
+      } catch (e) {
+        console.error("Backend auth error:", e);
+      }
+      
+      render([], []);
+    });
+  })();
+})();
+</script>
+{% endblock %}

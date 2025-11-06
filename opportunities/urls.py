@@ -1,18 +1,21 @@
-"""
-URL Configuration for Opportunities App
-"""
-from django.urls import path, include
-from rest_framework.routers import DefaultRouter
+from django.urls import path
 from . import views
 
-router = DefaultRouter()
-router.register(r'profiles', views.UserProfileViewSet)
-router.register(r'opportunities', views.OpportunityViewSet, basename='opportunity')
-router.register(r'applied', views.AppliedOpportunityViewSet, basename='applied')
-router.register(r'saved', views.SavedOpportunityViewSet, basename='saved')
+app_name = 'opportunities'
 
 urlpatterns = [
-    path('', include(router.urls)),
-    path('health/', views.health_check, name='health_check'),
-    path('dashboard/stats/', views.dashboard_stats, name='dashboard_stats'),
+    # HTML Pages
+    path('', views.index, name='index'),
+    path('explore/', views.explore, name='explore'),
+    path('applied/', views.applied, name='applied'),
+    path('saved/', views.saved, name='saved'),
+    
+    # API Endpoints
+    path('api/auth/verify/', views.auth_verify, name='auth_verify'),
+    path('api/match/', views.match_opportunities, name='match_opportunities'),
+    path('api/apply/', views.apply_opportunity, name='apply_opportunity'),
+    path('api/save/', views.save_opportunity, name='save_opportunity'),
+    path('api/pass/', views.pass_opportunity, name='pass_opportunity'),
+    path('api/applications/', views.get_applications, name='get_applications'),
+    path('api/saved/', views.get_saved, name='get_saved'),
 ]
