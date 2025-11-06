@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - RFPueen{% endblock %}
+
+{% block extra_styles %}
+<style>
+    .dashboard-cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 24px;
+        margin-top: 24px;
+    }
+    
+    .dashboard-card {
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        border-radius: 14px;
+        padding: 32px;
+        text-decoration: none;
+        color: inherit;
+        transition: all 0.2s;
+        cursor: pointer;
+    }
+    
+    .dashboard-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+    }
+    
+    .card-icon {
+        font-size: 3rem;
+        margin-bottom: 16px;
+    }
+    
+    .card-title {
+        font-size: 1.5rem;
+        font-weight: 700;
+        margin-bottom: 12px;
+        color: #111827;
+    }
+    
+    .card-description {
+        color: #6b7280;
+        line-height: 1.6;
+    }
+    
+    .stats {
+        font-size: 2rem;
+        font-weight: 700;
+        color: #685bc6;
+        margin-bottom: 8px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<h1 style="margin-bottom: 32px;">Welcome to Your Dashboard</h1>
+
+<div class="dashboard-cards">
+    <a href="/explore" class="dashboard-card">
+        <div class="card-icon">🔍</div>
+        <div class="card-title">Explore Opportunities</div>
+        <div class="card-description">
+            Find new opportunities matched to your profile
+        </div>
+    </a>
+    
+    <a href="/dashboard-applied" class="dashboard-card">
+        <div class="card-icon">📝</div>
+        <div class="card-title">Applied Opportunities</div>
+        <div class="card-description" id="applied-count">
+            Loading...
+        </div>
+    </a>
+    
+    <a href="/dashboard-saved" class="dashboard-card">
+        <div class="card-icon">💾</div>
+        <div class="card-title">Saved Opportunities</div>
+        <div class="card-description" id="saved-count">
+            Loading...
+        </div>
+    </a>
+</div>
+
+<script>
+const API_BASE = '/api';
+
+// Load dashboard stats
+fetch(`${API_BASE}/dashboard/stats/`, {
+    credentials: 'include'
+})
+.then(response => response.json())
+.then(data => {
+    document.getElementById('applied-count').textContent = 
+        `${data.applied_count} opportunit${data.applied_count !== 1 ? 'ies' : 'y'} you've applied to`;
+    document.getElementById('saved-count').textContent = 
+        `${data.saved_count} opportunit${data.saved_count !== 1 ? 'ies' : 'y'} saved for later`;
+})
+.catch(error => {
+    console.error('Error loading stats:', error);
+    document.getElementById('applied-count').textContent = 'Error loading data';
+    document.getElementById('saved-count').textContent = 'Error loading data';
+});
+</script>
+{% endblock %}

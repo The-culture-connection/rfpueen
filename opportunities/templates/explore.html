@@ -1,0 +1,526 @@
+{% extends "base.html" %}
+
+{% block title %}Explore Opportunities - RFPueen{% endblock %}
+
+{% block extra_styles %}
+<style>
+    .controls {
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        border-radius: 14px;
+        padding: 24px;
+        margin-bottom: 24px;
+    }
+    
+    .controls h2 {
+        margin-bottom: 16px;
+        font-size: 1.25rem;
+    }
+    
+    .form-group {
+        margin-bottom: 16px;
+    }
+    
+    .form-group label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: 600;
+        color: #374151;
+    }
+    
+    .form-group input[type="text"],
+    .form-group select {
+        width: 100%;
+        padding: 12px;
+        border: 1px solid #cbd5e1;
+        border-radius: 10px;
+        font-size: 14px;
+    }
+    
+    .checkbox-group {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 12px;
+    }
+    
+    .checkbox-group label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    
+    .btn {
+        padding: 12px 24px;
+        border: none;
+        border-radius: 10px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    
+    .btn-primary {
+        background: #685bc6;
+        color: #fff;
+    }
+    
+    .btn-primary:hover {
+        background: #5448aa;
+    }
+    
+    .btn-primary:disabled {
+        background: #9ca3af;
+        cursor: not-allowed;
+    }
+    
+    .opportunity-card {
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        border-radius: 14px;
+        padding: 24px;
+        margin-bottom: 16px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+    
+    .card-badges {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 12px;
+        flex-wrap: wrap;
+    }
+    
+    .badge {
+        font-size: 0.75rem;
+        padding: 4px 8px;
+        border-radius: 8px;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+    
+    .badge-collection {
+        background: #f9fafb;
+        border: 1px solid #e5e7eb;
+        color: #374151;
+    }
+    
+    .badge-urgent {
+        background: #fee2e2;
+        border: 1px solid #dc2626;
+        color: #dc2626;
+    }
+    
+    .badge-soon {
+        background: #fef3c7;
+        border: 1px solid #f59e0b;
+        color: #f59e0b;
+    }
+    
+    .badge-ongoing {
+        background: #f9fafb;
+        border: 1px solid #6b7280;
+        color: #6b7280;
+    }
+    
+    .badge-match {
+        background: #f3f4f6;
+        border: 1px solid #685bc6;
+        color: #685bc6;
+    }
+    
+    .card-title {
+        font-size: 1.25rem;
+        font-weight: 600;
+        margin-bottom: 8px;
+        color: #111827;
+    }
+    
+    .card-agency {
+        color: #6b7280;
+        font-weight: 500;
+        margin-bottom: 12px;
+    }
+    
+    .card-description {
+        color: #374151;
+        line-height: 1.6;
+        margin-bottom: 16px;
+    }
+    
+    .card-meta {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 12px;
+        margin-bottom: 16px;
+        font-size: 0.85rem;
+        color: #6b7280;
+    }
+    
+    .card-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+    
+    .card-actions button, .card-actions a {
+        flex: 1;
+        min-width: 100px;
+        padding: 10px 16px;
+        border-radius: 10px;
+        font-weight: 600;
+        cursor: pointer;
+        text-decoration: none;
+        text-align: center;
+        transition: all 0.2s;
+    }
+    
+    .btn-apply {
+        background: #685bc6;
+        color: #fff;
+        border: none;
+    }
+    
+    .btn-apply:hover {
+        background: #5448aa;
+    }
+    
+    .btn-save {
+        background: #fff;
+        color: #111827;
+        border: 1px solid #e5e7eb;
+    }
+    
+    .btn-save:hover {
+        background: #f3f4f6;
+    }
+    
+    .btn-pass {
+        background: #fff;
+        color: #6b7280;
+        border: 1px solid #e5e7eb;
+    }
+    
+    .btn-pass:hover {
+        background: #fee2e2;
+        color: #dc2626;
+    }
+    
+    .win-rate-box {
+        background: #f9fafb;
+        border: 1px solid #e5e7eb;
+        border-radius: 10px;
+        padding: 12px;
+        margin-bottom: 12px;
+    }
+    
+    .win-rate-score {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: #685bc6;
+        margin-bottom: 8px;
+    }
+    
+    .win-rate-details {
+        font-size: 0.85rem;
+        color: #6b7280;
+    }
+    
+    .loading {
+        text-align: center;
+        padding: 40px;
+        color: #6b7280;
+    }
+    
+    .no-results {
+        text-align: center;
+        padding: 60px 20px;
+        color: #6b7280;
+    }
+    
+    .no-results h3 {
+        font-size: 1.5rem;
+        margin-bottom: 12px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="app">
+    <div class="controls">
+        <h2>Find Matching Opportunities</h2>
+        <div class="form-group">
+            <label>Funding Types</label>
+            <div class="checkbox-group">
+                <label><input type="checkbox" value="Contracts" class="funding-type"> Contracts</label>
+                <label><input type="checkbox" value="Grants" class="funding-type"> Grants</label>
+                <label><input type="checkbox" value="RFPs" class="funding-type"> RFPs</label>
+                <label><input type="checkbox" value="Bids" class="funding-type"> Bids</label>
+            </div>
+        </div>
+        
+        <div class="form-group">
+            <label>Main Interests (comma-separated keywords)</label>
+            <input type="text" id="interests-main" placeholder="e.g., technology, healthcare, education">
+        </div>
+        
+        <div class="form-group">
+            <label>Sub Interests (optional, comma-separated)</label>
+            <input type="text" id="interests-sub" placeholder="e.g., software development, training, consulting">
+        </div>
+        
+        <button id="find-btn" class="btn btn-primary">Find Matches</button>
+    </div>
+    
+    <div id="results"></div>
+</div>
+
+<script>
+const API_BASE = '/api';
+let csrfToken = '';
+
+// Get CSRF token
+fetch(`${API_BASE}/health/`)
+    .then(() => {
+        const cookies = document.cookie.split(';');
+        for (let cookie of cookies) {
+            const [name, value] = cookie.trim().split('=');
+            if (name === 'csrftoken') {
+                csrfToken = value;
+                break;
+            }
+        }
+    });
+
+document.getElementById('find-btn').addEventListener('click', findMatches);
+
+async function findMatches() {
+    const btn = document.getElementById('find-btn');
+    const results = document.getElementById('results');
+    
+    // Get form data
+    const fundingTypes = Array.from(document.querySelectorAll('.funding-type:checked')).map(cb => cb.value);
+    const interestsMain = document.getElementById('interests-main').value
+        .split(',')
+        .map(s => s.trim())
+        .filter(s => s);
+    const interestsSub = document.getElementById('interests-sub').value
+        .split(',')
+        .map(s => s.trim())
+        .filter(s => s);
+    
+    if (fundingTypes.length === 0) {
+        alert('Please select at least one funding type');
+        return;
+    }
+    
+    // Show loading
+    btn.disabled = true;
+    btn.textContent = 'Finding Matches...';
+    results.innerHTML = '<div class="loading">Finding matching opportunities...</div>';
+    
+    try {
+        const response = await fetch(`${API_BASE}/opportunities/match/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            credentials: 'include',
+            body: JSON.stringify({
+                funding_types: fundingTypes,
+                interests_main: interestsMain,
+                interests_sub: interestsSub,
+                exclude_applied: true,
+                exclude_saved: true,
+                limit: 100
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            renderOpportunities(data.opportunities);
+        } else {
+            results.innerHTML = `<div class="no-results"><h3>Error</h3><p>${data.error || 'Failed to fetch opportunities'}</p></div>`;
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        results.innerHTML = '<div class="no-results"><h3>Error</h3><p>Failed to connect to server</p></div>';
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Find Matches';
+    }
+}
+
+function renderOpportunities(opportunities) {
+    const results = document.getElementById('results');
+    
+    if (opportunities.length === 0) {
+        results.innerHTML = '<div class="no-results"><h3>No matches found</h3><p>Try adjusting your search criteria</p></div>';
+        return;
+    }
+    
+    results.innerHTML = `<h3 style="margin-bottom: 16px;">Found ${opportunities.length} matching opportunities</h3>` +
+        opportunities.map(opp => renderOpportunityCard(opp)).join('');
+}
+
+function renderOpportunityCard(opp) {
+    const urgencyColors = {
+        urgent: 'urgent',
+        soon: 'soon',
+        ongoing: 'ongoing'
+    };
+    
+    const deadline = opp.closeDate || opp.deadline || '';
+    const posted = opp.openDate || opp.postedDate || '';
+    const location = opp.place || [opp.city, opp.state].filter(Boolean).join(', ') || '—';
+    const url = opp.url || opp.synopsisUrl || opp.link || '#';
+    
+    const winRate = opp.win_rate ? opp.win_rate.toFixed(1) : '—';
+    const assessment = opp.win_rate_reasoning?.overall_assessment || '';
+    
+    return `
+        <div class="opportunity-card" data-id="${opp.id}">
+            <div class="card-badges">
+                <span class="badge badge-collection">${opp.collection || 'Match'}</span>
+                <span class="badge badge-${urgencyColors[opp.urgency] || 'ongoing'}">${opp.urgency || 'ongoing'}</span>
+                ${opp.match_score ? `<span class="badge badge-match">Match: ${opp.match_score}</span>` : ''}
+            </div>
+            
+            ${opp.win_rate ? `
+                <div class="win-rate-box">
+                    <div class="win-rate-score">Win Rate: ${winRate}%</div>
+                    <div class="win-rate-details">${assessment}</div>
+                </div>
+            ` : ''}
+            
+            <div class="card-title">${opp.title || 'Untitled Opportunity'}</div>
+            <div class="card-agency">${opp.agency || opp.department || 'Unknown Agency'}</div>
+            <div class="card-description">
+                ${(opp.description || opp.summary || 'No description available').substring(0, 250)}...
+            </div>
+            
+            <div class="card-meta">
+                <div><strong>Posted:</strong> ${posted ? new Date(posted).toLocaleDateString() : '—'}</div>
+                <div><strong>Deadline:</strong> ${deadline ? new Date(deadline).toLocaleDateString() : '—'}</div>
+                <div><strong>Location:</strong> ${location}</div>
+            </div>
+            
+            <div class="card-actions">
+                <button class="btn-apply" onclick="handleApply('${opp.id}')">Apply</button>
+                <button class="btn-save" onclick="handleSave('${opp.id}')">Save for Later</button>
+                <button class="btn-pass" onclick="handlePass('${opp.id}')">Pass</button>
+            </div>
+            
+            <div style="margin-top: 12px;">
+                <a href="${url}" target="_blank" style="color: #685bc6; text-decoration: none; font-size: 0.9rem; font-weight: 500;">
+                    View full details →
+                </a>
+            </div>
+        </div>
+    `;
+}
+
+window.handleApply = async function(oppId) {
+    const card = document.querySelector(`[data-id="${oppId}"]`);
+    const opp = getCurrentOpportunityData(oppId);
+    
+    if (!opp) return;
+    
+    if (confirm('Apply to this opportunity?')) {
+        try {
+            const response = await fetch(`${API_BASE}/applied/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
+                credentials: 'include',
+                body: JSON.stringify({
+                    opportunity_id: opp.id,
+                    collection: opp.collection,
+                    title: opp.title,
+                    agency: opp.agency || opp.department,
+                    url: opp.url || opp.synopsisUrl || opp.link,
+                    match_score: opp.match_score,
+                    win_rate: opp.win_rate,
+                    win_rate_reasoning: opp.win_rate_reasoning,
+                    data: opp
+                })
+            });
+            
+            if (response.ok) {
+                card.remove();
+                alert('Applied successfully!');
+            } else {
+                const data = await response.json();
+                alert(data.error || 'Failed to apply');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            alert('Failed to apply');
+        }
+    }
+};
+
+window.handleSave = async function(oppId) {
+    const card = document.querySelector(`[data-id="${oppId}"]`);
+    const opp = getCurrentOpportunityData(oppId);
+    
+    if (!opp) return;
+    
+    try {
+        const response = await fetch(`${API_BASE}/saved/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            credentials: 'include',
+            body: JSON.stringify({
+                opportunity_id: opp.id,
+                collection: opp.collection,
+                title: opp.title,
+                agency: opp.agency || opp.department,
+                url: opp.url || opp.synopsisUrl || opp.link,
+                match_score: opp.match_score,
+                data: opp
+            })
+        });
+        
+        if (response.ok) {
+            card.remove();
+            alert('Saved for later!');
+        } else {
+            const data = await response.json();
+            alert(data.error || 'Failed to save');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Failed to save');
+    }
+};
+
+window.handlePass = function(oppId) {
+    const card = document.querySelector(`[data-id="${oppId}"]`);
+    if (card) {
+        card.remove();
+    }
+};
+
+// Store opportunity data in memory for actions
+let opportunitiesData = {};
+
+function getCurrentOpportunityData(oppId) {
+    return opportunitiesData[oppId];
+}
+
+// Override renderOpportunities to store data
+const originalRenderOpportunities = renderOpportunities;
+renderOpportunities = function(opportunities) {
+    opportunitiesData = {};
+    opportunities.forEach(opp => {
+        opportunitiesData[opp.id] = opp;
+    });
+    originalRenderOpportunities(opportunities);
+};
+</script>
+{% endblock %}
